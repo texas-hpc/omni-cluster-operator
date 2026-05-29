@@ -2,7 +2,7 @@
 #MISE description="Package the Helm chart using the NBGV version."
 set -euo pipefail
 
-chart_version="${CHART_VERSION:-$(hack/mise/nbgv get-version -v SemVer2)}"
+chart_version="${CHART_VERSION:-$(nbgv get-version -v SemVer2)}"
 app_version="${APP_VERSION:-${chart_version}}"
 destination="${CHART_DESTINATION:-dist/charts}"
 

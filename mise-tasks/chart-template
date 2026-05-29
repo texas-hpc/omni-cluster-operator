@@ -2,7 +2,7 @@
 #MISE description="Render the Helm chart."
 set -euo pipefail
 
-chart_version="${CHART_VERSION:-$(hack/mise/nbgv get-version -v SemVer2)}"
+chart_version="${CHART_VERSION:-$(nbgv get-version -v SemVer2)}"
 app_version="${APP_VERSION:-${chart_version}}"
 image_repository="${IMAGE_REPOSITORY:-ghcr.io/texas-hpc/omni-cluster-operator}"
 image_tag="${IMAGE_TAG:-${chart_version}}"
