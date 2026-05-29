@@ -11,6 +11,127 @@ CRDs, validates it with `github.com/siderolabs/omni/client/pkg/template/operatio
 syncs it with `SyncTemplate`, reads status with `StatusCluster`, and removes remote
 template resources with `DeleteCluster` from a Kubernetes finalizer.
 
+## Installation
+
+Install the operator with Helm from the GHCR OCI chart registry:
+
+```sh
+helm install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <chart-version> \
+  --namespace omni-cluster-operator-system \
+  --create-namespace
+```
+
+Choose a chart version from the
+[GitHub Packages page](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator).
+The chart installs the operator deployment, RBAC, services, and CRDs. By default,
+webhooks are disabled and the manager image tag follows the chart app version.
+
+Inspect chart defaults before installing:
+
+```sh
+helm show values \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <chart-version>
+```
+
+If GHCR prompts for credentials, log in with a GitHub token that can read the
+package:
+
+```sh
+echo "$GITHUB_TOKEN" | helm registry login ghcr.io \
+  --username <github-user> \
+  --password-stdin
+```
+
+For testing an unreleased branch build, override the image tag explicitly:
+
+```sh
+helm upgrade --install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <chart-version> \
+  --namespace omni-cluster-operator-system \
+  --create-namespace \
+  --set image.tag=dev
+```
+
+## First Cluster Resources
+
+Create the Omni service account key in the namespace where your `OmniConnection`
+and cluster template resources will live. The Secret must not be committed to Git.
+
+```sh
+kubectl create namespace clusters
+
+kubectl create secret generic omni-service-account \
+  --namespace clusters \
+  --from-literal=serviceAccountKey='<output from omnictl serviceaccount create>'
+```
+
+Then apply an `OmniConnection`, one `OmniCluster`, exactly one
+`OmniControlPlane`, and any `OmniWorkers` or `OmniMachine` documents for that
+cluster:
+
+```yaml
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniConnection
+metadata:
+  name: omni
+  namespace: clusters
+spec:
+  endpoint: https://omni.example.com
+  auth:
+    serviceAccountSecretRef:
+      name: omni-service-account
+      key: serviceAccountKey
+---
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniCluster
+metadata:
+  name: edge
+  namespace: clusters
+spec:
+  connectionRef:
+    name: omni
+  kubernetes:
+    version: v1.35.0
+  talos:
+    version: v1.13.2
+  syncInterval: 5m
+---
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniControlPlane
+metadata:
+  name: edge-control-plane
+  namespace: clusters
+spec:
+  clusterRef:
+    name: edge
+  machines:
+    - 11111111-1111-4111-8111-111111111111
+---
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniWorkers
+metadata:
+  name: edge-workers
+  namespace: clusters
+spec:
+  clusterRef:
+    name: edge
+  machines:
+    - 22222222-2222-4222-8222-222222222222
+```
+
+Check reconciliation status with:
+
+```sh
+kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines \
+  --namespace clusters
+
+kubectl describe omnicluster edge --namespace clusters
+```
+
 ## API Shape
 
 The API group is `omni.texas-hpc.org/v1alpha1`.
