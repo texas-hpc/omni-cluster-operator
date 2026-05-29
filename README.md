@@ -148,8 +148,7 @@ via the root `version.json`. The `Publish` GitHub Actions workflow is gated to
 - the Helm chart as an OCI artifact at
   `oci://ghcr.io/texas-hpc/charts/omni-cluster-operator`
 
-Both artifacts use the same NBGV `SemVer2` value, for example
-`0.1.0-g<commit>`.
+Both artifacts use the same NBGV `SemVer2` value, for example `0.2.0`.
 
 Install a published chart version with:
 
