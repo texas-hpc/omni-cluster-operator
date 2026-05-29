@@ -50,19 +50,23 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	By("building the manager image")
-	containerTool := os.Getenv("CONTAINER_TOOL")
-	if containerTool == "" {
-		containerTool = "docker"
+	if os.Getenv("E2E_SKIP_MANAGER_IMAGE_BUILD") == "true" {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping manager image build (E2E_SKIP_MANAGER_IMAGE_BUILD=true)\n")
+	} else {
+		By("building the manager image")
+		containerTool := os.Getenv("CONTAINER_TOOL")
+		if containerTool == "" {
+			containerTool = "docker"
+		}
+		cmd := exec.Command(containerTool, "build", "-t", managerImage, ".")
+		_, err := utils.Run(cmd)
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager image")
 	}
-	cmd := exec.Command(containerTool, "build", "-t", managerImage, ".")
-	_, err := utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager image")
 
 	// To change the e2e test vendor from Kind,
 	// ensure the image is built and available, then remove the following block.
 	By("loading the manager image on Kind")
-	err = utils.LoadImageToKindClusterWithName(managerImage)
+	err := utils.LoadImageToKindClusterWithName(managerImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager image into Kind")
 
 	configureKubectlKubeRC()

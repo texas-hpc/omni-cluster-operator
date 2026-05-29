@@ -25,6 +25,12 @@ bin/
 dist/
 .kustomize-image.*/
 
+# Local release artifacts
+dist/
+
+# Local Omni credentials and fixture state
+.local/
+
 # Go workspace file
 go.work
 go.work.sum
