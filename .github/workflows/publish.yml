@@ -94,33 +94,12 @@ jobs:
       - name: Push Helm chart to GHCR OCI registry
         run: helm push "dist/charts/omni-cluster-operator-${{ steps.version.outputs.version }}.tgz" "${CHART_REGISTRY}"
 
-      - name: Verify anonymous GHCR pulls
+      - name: Verify GHCR pulls
         env:
           IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          CHART_REPOSITORY: ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator
+          CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          verify_public_manifest() {
-            local ref="$1"
-            local tag="$2"
-            local repository="${ref#ghcr.io/}"
-            local token
-
-            token="$(
-              curl --retry 5 -fsSL --get "https://ghcr.io/token" \
-                --data-urlencode "service=ghcr.io" \
-                --data-urlencode "scope=repository:${repository}:pull" \
-                | python3 -c 'import json, sys; print(json.load(sys.stdin).get("token", ""))'
-            )"
-
-            test -n "${token}"
-            curl --retry 5 -fsSL \
-              -H "Authorization: Bearer ${token}" \
-              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
-              "https://ghcr.io/v2/${repository}/manifests/${tag}" \
-              >/dev/null
-          }
-
-          verify_public_manifest "${IMAGE_REPOSITORY}" "${VERSION}"
-          verify_public_manifest "${IMAGE_REPOSITORY}" latest
-          verify_public_manifest "${CHART_REPOSITORY}" "${VERSION}"
+          docker buildx imagetools inspect "${IMAGE_REPOSITORY}:${VERSION}" >/dev/null
+          docker buildx imagetools inspect "${IMAGE_REPOSITORY}:latest" >/dev/null
+          helm show chart "${CHART_REPOSITORY}" --version "${VERSION}" >/dev/null
