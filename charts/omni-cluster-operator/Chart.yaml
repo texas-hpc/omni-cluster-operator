@@ -1,0 +1,16 @@
+apiVersion: v2
+name: omni-cluster-operator
+description: Kubernetes operator for managing Sidero Omni cluster lifecycles with CRDs.
+type: application
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/texas-hpc/omni-cluster-operator
+sources:
+  - https://github.com/texas-hpc/omni-cluster-operator
+keywords:
+  - omni
+  - talos
+  - kubernetes
+  - operator
+maintainers:
+  - name: Texas HPC

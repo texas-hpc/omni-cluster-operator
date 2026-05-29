@@ -37,6 +37,7 @@ import (
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 	"github.com/texas-hpc/omni-cluster-operator/internal/controller"
+	webhookv1alpha1 "github.com/texas-hpc/omni-cluster-operator/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -212,6 +213,25 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnimachine")
 		os.Exit(1)
+	}
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		webhooks := []struct {
+			name  string
+			setup func(ctrl.Manager) error
+		}{
+			{name: "OmniCluster", setup: webhookv1alpha1.SetupOmniClusterWebhookWithManager},
+			{name: "OmniConnection", setup: webhookv1alpha1.SetupOmniConnectionWebhookWithManager},
+			{name: "OmniControlPlane", setup: webhookv1alpha1.SetupOmniControlPlaneWebhookWithManager},
+			{name: "OmniMachine", setup: webhookv1alpha1.SetupOmniMachineWebhookWithManager},
+			{name: "OmniWorkers", setup: webhookv1alpha1.SetupOmniWorkersWebhookWithManager},
+		}
+
+		for _, item := range webhooks {
+			if err := item.setup(mgr); err != nil {
+				setupLog.Error(err, "Failed to create webhook", "webhook", item.name)
+				os.Exit(1)
+			}
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

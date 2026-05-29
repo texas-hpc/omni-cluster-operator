@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run the operator in the local kind cluster with Tilt."
+set -euo pipefail
+
+tilt up

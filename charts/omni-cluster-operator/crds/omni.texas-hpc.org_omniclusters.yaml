@@ -1,0 +1,351 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: omniclusters.omni.texas-hpc.org
+spec:
+  group: omni.texas-hpc.org
+  names:
+    kind: OmniCluster
+    listKind: OmniClusterList
+    plural: omniclusters
+    singular: omnicluster
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OmniCluster is the Schema for the omniclusters API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of OmniCluster
+            properties:
+              annotations:
+                additionalProperties:
+                  type: string
+                description: annotations are applied to the generated Omni resource.
+                type: object
+              clusterName:
+                description: |-
+                  clusterName is the Omni cluster name. Defaults to metadata.name when omitted.
+                  Changing this creates a different cluster in Omni.
+                pattern: ^[A-Za-z0-9_-]+$
+                type: string
+              connectionRef:
+                description: connectionRef selects the OmniConnection used for this
+                  cluster and all child template documents.
+                properties:
+                  name:
+                    description: name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              deletePolicy:
+                description: deletePolicy controls remote Omni cleanup when this resource
+                  is deleted.
+                properties:
+                  destroyMachines:
+                    description: destroyMachines forcefully removes disconnected nodes
+                      while deleting template resources.
+                    type: boolean
+                  orphan:
+                    description: orphan leaves the remote Omni cluster and template-managed
+                      resources intact.
+                    type: boolean
+                type: object
+              features:
+                description: features configures optional Omni cluster features.
+                properties:
+                  backupConfiguration:
+                    description: backupConfiguration configures automatic etcd backups.
+                    properties:
+                      interval:
+                        description: interval is a Go duration. Set "0" to disable
+                          automatic backups.
+                        minLength: 1
+                        type: string
+                    required:
+                    - interval
+                    type: object
+                  diskEncryption:
+                    description: diskEncryption configures Omni as the cluster key
+                      management server.
+                    type: boolean
+                  enableWorkloadProxy:
+                    description: enableWorkloadProxy enables the Omni workload proxy.
+                    type: boolean
+                  useEmbeddedDiscoveryService:
+                    description: useEmbeddedDiscoveryService uses Omni's embedded
+                      discovery service instead of discovery.talos.dev.
+                    type: boolean
+                type: object
+              kernelArgs:
+                description: kernelArgs are managed for static machines in this cluster.
+                items:
+                  type: string
+                type: array
+              kubernetes:
+                description: kubernetes configures the Kubernetes version and optional
+                  Omni-managed manifests.
+                properties:
+                  manifests:
+                    description: manifests are synced to the workload cluster by Omni.
+                    items:
+                      description: KubernetesManifest is an Omni template Kubernetes
+                        manifest entry.
+                      properties:
+                        file:
+                          description: file is a manifest file path relative to the
+                            OmniCluster spec.templateRoot mounted in the operator.
+                          type: string
+                        inline:
+                          description: inline contains Kubernetes objects to sync.
+                          items:
+                            x-kubernetes-preserve-unknown-fields: true
+                          type: array
+                          x-kubernetes-preserve-unknown-fields: true
+                        mode:
+                          default: full
+                          description: mode controls how Omni applies the manifest.
+                          enum:
+                          - one-time
+                          - full
+                          type: string
+                        name:
+                          description: name is unique within the cluster template.
+                          minLength: 1
+                          type: string
+                      required:
+                      - mode
+                      - name
+                      type: object
+                    type: array
+                  version:
+                    description: version is the Kubernetes version to use, for example
+                      v1.35.0.
+                    pattern: ^v[0-9]+\.[0-9]+\.[0-9]+$
+                    type: string
+                required:
+                - version
+                type: object
+              labels:
+                additionalProperties:
+                  type: string
+                description: labels are applied to the generated Omni resource.
+                type: object
+              patches:
+                description: patches are applied at cluster scope.
+                items:
+                  description: Patch is a Talos machine configuration patch reference
+                    used by Omni cluster templates.
+                  properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      description: annotations are applied to the generated config
+                        patch.
+                      type: object
+                    file:
+                      description: |-
+                        file is a patch file path relative to the OmniCluster spec.templateRoot mounted in the operator.
+                        Prefer inline for GitOps CRs unless the operator deployment mounts this file tree.
+                      type: string
+                    idOverride:
+                      description: idOverride overrides Omni's generated config patch
+                        ID.
+                      type: string
+                    inline:
+                      description: inline is a Talos strategic machine configuration
+                        patch.
+                      x-kubernetes-preserve-unknown-fields: true
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: labels are applied to the generated config patch.
+                      type: object
+                    name:
+                      description: name is the human-readable patch name.
+                      type: string
+                  type: object
+                type: array
+              suspend:
+                description: suspend stops remote Omni sync while preserving status
+                  and finalizers.
+                type: boolean
+              syncInterval:
+                default: 5m
+                description: syncInterval controls periodic reconciliation even when
+                  no Kubernetes object changed.
+                type: string
+              systemExtensions:
+                description: systemExtensions are installed on every machine in the
+                  cluster.
+                items:
+                  type: string
+                type: array
+              talos:
+                description: talos configures the Talos version.
+                properties:
+                  version:
+                    description: version is the Talos version to use, for example
+                      v1.13.2.
+                    pattern: ^v[0-9]+\.[0-9]+\.[0-9]+$
+                    type: string
+                required:
+                - version
+                type: object
+              templateRoot:
+                description: |-
+                  templateRoot is an optional directory in the operator container used to resolve file-based patches
+                  and Kubernetes manifests. Inline specs are recommended for fully Kubernetes-native GitOps.
+                type: string
+            required:
+            - connectionRef
+            - kubernetes
+            - talos
+            type: object
+          status:
+            description: status defines the observed state of OmniCluster
+            properties:
+              clusterName:
+                description: clusterName is the Omni cluster name.
+                type: string
+              conditions:
+                description: conditions represent the current state of the resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              connectionRef:
+                description: connectionRef is the last OmniConnection name observed
+                  by the controller.
+                type: string
+              controlPlaneRef:
+                description: controlPlaneRef is the control plane document selected
+                  for the last rendered template.
+                type: string
+              endpoint:
+                description: endpoint is the last Omni endpoint observed by the controller.
+                type: string
+              lastAttemptTime:
+                description: lastAttemptTime is when the controller last attempted
+                  a remote Omni operation.
+                format: date-time
+                type: string
+              lastStatusOutput:
+                description: lastStatusOutput is the latest status output read from
+                  Omni.
+                type: string
+              lastSyncOutput:
+                description: lastSyncOutput is a concise summary emitted by Omni template
+                  operations.
+                type: string
+              lastSyncTime:
+                description: lastSyncTime is when the controller last successfully
+                  synced Omni.
+                format: date-time
+                type: string
+              machineRefs:
+                description: machineRefs are the machine documents selected for the
+                  last rendered template.
+                items:
+                  type: string
+                type: array
+              observedGeneration:
+                description: observedGeneration is the latest generation handled by
+                  the controller.
+                format: int64
+                type: integer
+              templateHash:
+                description: templateHash is the SHA-256 hash of the last rendered
+                  desired Omni template.
+                type: string
+              workersRefs:
+                description: workersRefs are the worker documents selected for the
+                  last rendered template.
+                items:
+                  type: string
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

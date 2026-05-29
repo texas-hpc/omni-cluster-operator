@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Copy generated CRDs into the Helm chart."
+set -euo pipefail
+
+mkdir -p charts/omni-cluster-operator/crds
+cp config/crd/bases/*.yaml charts/omni-cluster-operator/crds/

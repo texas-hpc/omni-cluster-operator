@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -28,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -136,7 +136,7 @@ func (r *OmniClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	now := metav1.Now()
 	syncOutput, err := r.omniClient().SyncTemplate(ctx, connection, rendered.Template, cluster.Spec.TemplateRoot, omniapi.SyncOptions{
-		DestroyMachines: cluster.Spec.DeletePolicy.DestroyMachines,
+		DestroyMachines: false,
 	})
 	if err != nil {
 		message := fmt.Sprintf("sync failed: %v", err)
@@ -338,11 +338,11 @@ func trimStatus(output string) string {
 // SetupWithManager sets up the controller with the Manager.
 func (r *OmniClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&omniv1alpha1.OmniCluster{}).
-		Watches(&omniv1alpha1.OmniConnection{}, handler.EnqueueRequestsFromMapFunc(r.clustersForConnection)).
-		Watches(&omniv1alpha1.OmniControlPlane{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster)).
-		Watches(&omniv1alpha1.OmniWorkers{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster)).
-		Watches(&omniv1alpha1.OmniMachine{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster)).
+		For(&omniv1alpha1.OmniCluster{}, builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniConnection{}, handler.EnqueueRequestsFromMapFunc(r.clustersForConnection), builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniControlPlane{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniWorkers{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniMachine{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Named("omnicluster").
 		Complete(r)
 }
@@ -383,9 +383,5 @@ func (r *OmniClusterReconciler) clustersForConnection(ctx context.Context, objec
 		}
 	}
 
-	sort.Slice(requests, func(i, j int) bool {
-		return strings.Compare(requests[i].String(), requests[j].String()) < 0
-	})
-
-	return requests
+	return sortRequests(requests)
 }

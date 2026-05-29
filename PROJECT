@@ -18,6 +18,45 @@ resources:
   kind: OmniCluster
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: texas-hpc.org
+  group: omni
+  kind: OmniConnection
+  path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: texas-hpc.org
+  group: omni
+  kind: OmniControlPlane
+  path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: texas-hpc.org
+  group: omni
+  kind: OmniMachine
+  path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -27,4 +66,7 @@ resources:
   kind: OmniWorkers
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 version: "3"

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Render the default deployment manifests."
+set -euo pipefail
+
+kustomize build config/default

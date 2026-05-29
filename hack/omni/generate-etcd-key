@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+output="${1:-.local/omni/omni.asc}"
+if [[ -s "${output}" ]]; then
+  echo "${output}"
+  exit 0
+fi
+
+if ! command -v gpg >/dev/null 2>&1; then
+  echo "gpg is required to generate ${output}" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "${output}")"
+workdir="$(mktemp -d)"
+trap 'rm -rf "${workdir}"' EXIT
+
+export GNUPGHOME="${workdir}"
+gpg --batch --passphrase '' --quick-generate-key \
+  "Omni Cluster Operator Fixture <admin@omni.local>" rsa4096 cert never
+fingerprint="$(gpg --with-colons --list-keys admin@omni.local | awk -F: '$1 == "fpr" { print $10; exit }')"
+gpg --batch --passphrase '' --quick-add-key "${fingerprint}" rsa4096 encr never
+gpg --export-secret-key --armor admin@omni.local > "${output}"
+
+echo "${output}"

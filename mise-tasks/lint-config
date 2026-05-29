@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Verify golangci-lint configuration."
+set -euo pipefail
+
+hack/mise/golangci-lint config verify

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+base="${1:?usage: kustomize-build-with-image <base> <image>}"
+image="${2:?usage: kustomize-build-with-image <base> <image>}"
+tmpdir="$(mktemp -d .kustomize-image.XXXXXX)"
+trap 'rm -rf "${tmpdir}"' EXIT
+
+if [[ "${image}" == *@sha256:* ]]; then
+  new_name="${image%@sha256:*}"
+  digest="sha256:${image##*@sha256:}"
+  cat > "${tmpdir}/kustomization.yaml" <<EOF
+resources:
+- ../${base}
+images:
+- name: controller
+  newName: ${new_name}
+  digest: ${digest}
+EOF
+elif [[ "${image##*/}" == *:* ]]; then
+  new_name="${image%:*}"
+  new_tag="${image##*:}"
+  cat > "${tmpdir}/kustomization.yaml" <<EOF
+resources:
+- ../${base}
+images:
+- name: controller
+  newName: ${new_name}
+  newTag: ${new_tag}
+EOF
+else
+  cat > "${tmpdir}/kustomization.yaml" <<EOF
+resources:
+- ../${base}
+images:
+- name: controller
+  newName: ${image}
+EOF
+fi
+
+if command -v kustomize >/dev/null 2>&1; then
+  kustomize build --load-restrictor LoadRestrictionsNone "${tmpdir}"
+else
+  mise exec -- kustomize build --load-restrictor LoadRestrictionsNone "${tmpdir}"
+fi

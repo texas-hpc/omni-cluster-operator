@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Show status for the optional local Omni live-test fixture."
+set -euo pipefail
+
+namespace="${OMNI_NAMESPACE:-omni-system}"
+kubectl get deploy,pods,svc,pvc -n "${namespace}"

@@ -29,37 +29,76 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 )
+
+const testClusterName = "edge"
 
 type fakeOmni struct {
 	pingErr        error
 	syncErr        error
 	statusErr      error
 	syncedTemplate []byte
+	syncOptions    []omniapi.SyncOptions
 	syncCalls      int
 	deleteCalls    []string
+	deleteOptions  []omniapi.SyncOptions
 }
 
 func (f *fakeOmni) Ping(_ context.Context, connection *omniv1alpha1.OmniConnection) (string, error) {
 	return fmt.Sprintf("connected to %s", connection.Spec.Endpoint), f.pingErr
 }
 
-func (f *fakeOmni) SyncTemplate(_ context.Context, _ *omniv1alpha1.OmniConnection, templateBytes []byte, _ string, _ omniapi.SyncOptions) (string, error) {
+func (f *fakeOmni) SyncTemplate(_ context.Context, _ *omniv1alpha1.OmniConnection, templateBytes []byte, _ string, options omniapi.SyncOptions) (string, error) {
 	f.syncCalls++
+	f.syncOptions = append(f.syncOptions, options)
 	f.syncedTemplate = append([]byte(nil), templateBytes...)
 	return "synced", f.syncErr
 }
 
-func (f *fakeOmni) DeleteCluster(_ context.Context, _ *omniv1alpha1.OmniConnection, clusterName string, _ omniapi.SyncOptions) (string, error) {
+func (f *fakeOmni) DeleteCluster(_ context.Context, _ *omniv1alpha1.OmniConnection, clusterName string, options omniapi.SyncOptions) (string, error) {
 	f.deleteCalls = append(f.deleteCalls, clusterName)
+	f.deleteOptions = append(f.deleteOptions, options)
 	return "deleted", nil
 }
 
 func (f *fakeOmni) StatusCluster(_ context.Context, _ *omniv1alpha1.OmniConnection, clusterName string) (string, error) {
 	return fmt.Sprintf("status %s", clusterName), f.statusErr
+}
+
+func TestOmniClusterDoesNotDestroyMachinesDuringNormalSync(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	cluster := testCluster()
+	cluster.Spec.DeletePolicy.DestroyMachines = true
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}).
+		WithObjects(testConnection(), cluster, testControlPlane(), testWorkers()).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	if len(omni.syncOptions) != 1 {
+		t.Fatalf("syncOptions length = %d, want 1", len(omni.syncOptions))
+	}
+	if omni.syncOptions[0].DestroyMachines {
+		t.Fatal("DestroyMachines was passed to normal SyncTemplate")
+	}
 }
 
 func TestOmniClusterReconcilesTemplateToOmni(t *testing.T) {
@@ -75,7 +114,7 @@ func TestOmniClusterReconcilesTemplateToOmni(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "edge"}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
@@ -103,7 +142,7 @@ func TestOmniClusterReconcilesTemplateToOmni(t *testing.T) {
 	if cluster.Status.TemplateHash == "" {
 		t.Fatal("TemplateHash is empty")
 	}
-	if cluster.Status.ClusterName != "edge" {
+	if cluster.Status.ClusterName != testClusterName {
 		t.Fatalf("ClusterName = %q, want edge", cluster.Status.ClusterName)
 	}
 }
@@ -121,7 +160,7 @@ func TestOmniClusterMissingControlPlaneDoesNotSync(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "edge"}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
@@ -160,14 +199,46 @@ func TestOmniClusterDeleteCallsOmniFinalizer(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "edge"}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	if len(omni.deleteCalls) != 1 || omni.deleteCalls[0] != "edge" {
+	if len(omni.deleteCalls) != 1 || omni.deleteCalls[0] != testClusterName {
 		t.Fatalf("deleteCalls = %#v, want [edge]", omni.deleteCalls)
+	}
+}
+
+func TestOmniClusterDeletePassesDestroyMachines(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	deletionTime := metav1.Now()
+	cluster := testCluster()
+	cluster.Spec.DeletePolicy.DestroyMachines = true
+	cluster.Finalizers = []string{omniv1alpha1.Finalizer}
+	cluster.DeletionTimestamp = &deletionTime
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}).
+		WithObjects(testConnection(), cluster).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	if len(omni.deleteOptions) != 1 {
+		t.Fatalf("deleteOptions length = %d, want 1", len(omni.deleteOptions))
+	}
+	if !omni.deleteOptions[0].DestroyMachines {
+		t.Fatal("DestroyMachines was not passed to DeleteCluster")
 	}
 }
 
@@ -204,6 +275,70 @@ func TestChildControllerMarksMissingCluster(t *testing.T) {
 	}
 }
 
+func TestSpecOrDeletionChangedPredicateIgnoresStatusOnlyUpdates(t *testing.T) {
+	t.Parallel()
+
+	predicate := specOrDeletionChangedPredicate()
+	oldCluster := testCluster()
+	oldCluster.Generation = 7
+	newCluster := oldCluster.DeepCopy()
+	newCluster.Status.ClusterName = testClusterName
+
+	if predicate.Update(event.UpdateEvent{ObjectOld: oldCluster, ObjectNew: newCluster}) {
+		t.Fatal("status-only update should be ignored")
+	}
+
+	specChanged := oldCluster.DeepCopy()
+	specChanged.Generation = 8
+	if !predicate.Update(event.UpdateEvent{ObjectOld: oldCluster, ObjectNew: specChanged}) {
+		t.Fatal("generation update should be accepted")
+	}
+
+	deleting := oldCluster.DeepCopy()
+	deletionTime := metav1.Now()
+	deleting.DeletionTimestamp = &deletionTime
+	if !predicate.Update(event.UpdateEvent{ObjectOld: oldCluster, ObjectNew: deleting}) {
+		t.Fatal("deletion timestamp update should be accepted")
+	}
+}
+
+func TestChildRequestsForCluster(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	otherControlPlane := testControlPlane()
+	otherControlPlane.Name = "other-cp"
+	otherControlPlane.Spec.ClusterRef.Name = "other"
+	workers := testWorkers()
+	machine := &omniv1alpha1.OmniMachine{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
+		Spec: omniv1alpha1.OmniMachineSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
+		},
+	}
+	cluster := testCluster()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(testControlPlane(), otherControlPlane, workers, machine).
+		Build()
+
+	controlPlaneRequests := controlPlaneRequestsForCluster(ctx, k8sClient, cluster)
+	if len(controlPlaneRequests) != 1 || controlPlaneRequests[0].Name != "edge-cp" {
+		t.Fatalf("controlPlaneRequests = %#v, want [edge-cp]", controlPlaneRequests)
+	}
+
+	workersRequests := workersRequestsForCluster(ctx, k8sClient, cluster)
+	if len(workersRequests) != 1 || workersRequests[0].Name != "workers" {
+		t.Fatalf("workersRequests = %#v, want [workers]", workersRequests)
+	}
+
+	machineRequests := machineRequestsForCluster(ctx, k8sClient, cluster)
+	if len(machineRequests) != 1 || machineRequests[0].Name != "node-1" {
+		t.Fatalf("machineRequests = %#v, want [node-1]", machineRequests)
+	}
+}
+
 func testScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 
@@ -235,7 +370,7 @@ func testConnection() *omniv1alpha1.OmniConnection {
 
 func testCluster() *omniv1alpha1.OmniCluster {
 	return &omniv1alpha1.OmniCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "edge", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testClusterName, Namespace: "default"},
 		Spec: omniv1alpha1.OmniClusterSpec{
 			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "omni"},
 			Kubernetes:    omniv1alpha1.KubernetesSpec{Version: "v1.35.0"},
@@ -248,7 +383,7 @@ func testControlPlane() *omniv1alpha1.OmniControlPlane {
 	return &omniv1alpha1.OmniControlPlane{
 		ObjectMeta: metav1.ObjectMeta{Name: "edge-cp", Namespace: "default"},
 		Spec: omniv1alpha1.OmniControlPlaneSpec{
-			ClusterRef: omniv1alpha1.OmniClusterRef{Name: "edge"},
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
 			MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 				MachineClass: &omniv1alpha1.MachineClass{
 					Name: "control-plane",
@@ -263,7 +398,7 @@ func testWorkers() *omniv1alpha1.OmniWorkers {
 	return &omniv1alpha1.OmniWorkers{
 		ObjectMeta: metav1.ObjectMeta{Name: "workers", Namespace: "default"},
 		Spec: omniv1alpha1.OmniWorkersSpec{
-			ClusterRef: omniv1alpha1.OmniClusterRef{Name: "edge"},
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
 			MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 				MachineClass: &omniv1alpha1.MachineClass{
 					Name: "workers",

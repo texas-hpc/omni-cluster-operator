@@ -19,8 +19,27 @@ The local stack is pinned in `mise.toml`:
 - Tilt `0.37.3`
 - kubectl `1.36.1`
 - kustomize `5.8.1`
+- Helm `3.21.0`
+- .NET SDK `10.0.300`
 - golangci-lint `2.11.4`
 - omnictl `1.8.0`
+- NBGV `3.9.50` through a repo-local dotnet tool helper
+- controller-gen `0.20.1` through mise's Go backend
+- setup-envtest `release-0.23` through mise's Go backend
+
+Automation is intentionally mise-native. Build, generate, test, deploy, e2e,
+kind, cert-manager, and Tilt commands live as executable file tasks under
+`mise-tasks/`, which keeps local development, CI, and the devcontainer on the
+same pinned toolchain.
+
+The operator runtime image is not mise-based. It uses the pinned upstream Go
+builder image and a distroless runtime image; mise stays on the local development,
+devcontainer, and CI side of the boundary.
+
+Release versions come from root `version.json` using Nerdbank.GitVersioning.
+Publishing is intentionally restricted to the `master` branch. The publish
+workflow pushes the operator image to GHCR and packages the Helm chart as an OCI
+artifact in GHCR with the same NBGV SemVer value.
 
 ## Omni Client Surface
 
@@ -72,12 +91,22 @@ server can enforce invariants cheaply:
 - Version strings are constrained to `vX.Y.Z`.
 - worker set names and cluster names use Omni-compatible name patterns.
 
+Validating webhooks enforce per-object invariants that are awkward to maintain as
+schema-only markers:
+
+- patches and Kubernetes manifests must set exactly one source (`file` or
+  `inline`)
+- `deletePolicy.orphan` cannot be combined with `destroyMachines`
+- machine class sizes must be positive integers or Omni's supported string
+  keywords
+- `workerSetName: control-planes` is reserved
+- static-only kernel args are rejected on machine-class-backed sets
+- rendered static machine IDs must be UUIDs
+
 The controller also runs `operations.ValidateTemplate` before any remote sync, so
-Omni remains the source of truth for full template validity. A webhook server is
-scaffolded by Kubebuilder and can be added later if we need cross-object admission
-checks before persistence. Today those checks are safer in reconciliation because
-they depend on the assembled template and, potentially, the mounted template file
-root.
+Omni remains the source of truth for full assembled-template validity. Cross-object
+checks stay in reconciliation because they depend on the assembled template and,
+potentially, the mounted template file root.
 
 ## Local Test Harness
 
@@ -86,7 +115,14 @@ The repo includes two local loops:
 - fast Go unit tests against a fake controller-runtime client and fake Omni client
 - kind/ctlptl/Tilt for running the manager in a real local Kubernetes API server
 
-The e2e scaffold is in place but still generic. A meaningful next step is a
-self-hosted Omni fixture or protocol-compatible fake server that can exercise the
-real `github.com/siderolabs/omni/client` transport without requiring a developer's
-personal Omni SaaS account.
+The kind e2e suite deploys the manager, validates CRD/webhook admission, and
+checks suspended reconciliation and child status without requiring live Omni
+credentials.
+
+The optional live fixture under `hack/omni/` installs real Omni into the kind
+cluster through Sidero's Helm chart and uses Dex for local OIDC. The live suite is
+tagged `live_omni`; its first test creates an `OmniConnection` and waits for the
+deployed controller to prove service account auth and COSI cluster listing through
+the real `github.com/siderolabs/omni/client` transport. Full create/delete cluster
+lifecycle tests are deliberately left behind an explicit future gate because they
+need disposable Omni machines or machine classes.

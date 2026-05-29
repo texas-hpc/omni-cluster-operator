@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Print Nerdbank.GitVersioning version information."
+set -euo pipefail
+
+hack/mise/nbgv get-version "$@"

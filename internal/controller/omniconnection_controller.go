@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -111,7 +112,7 @@ func (r *OmniConnectionReconciler) updateConnectionStatus(ctx context.Context, c
 // SetupWithManager sets up the controller with the Manager.
 func (r *OmniConnectionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&omniv1alpha1.OmniConnection{}).
+		For(&omniv1alpha1.OmniConnection{}, builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Named("omniconnection").
 		Complete(r)
 }

@@ -2,7 +2,11 @@ name: Lint
 
 on:
   push:
+    branches:
+      - master
   pull_request:
+    branches:
+      - master
 
 permissions: {}
 
@@ -10,7 +14,7 @@ jobs:
   lint:
     permissions:
       contents: read
-    name: Run on Ubuntu
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
@@ -18,12 +22,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      - name: Setup mise
+        uses: jdx/mise-action@v3
         with:
-          go-version-file: go.mod
+          install: true
+          cache: true
 
       - name: Check linter configuration
-        run: make lint-config
+        run: mise run lint-config
       - name: Run linter
-        run: make lint
+        run: mise run lint

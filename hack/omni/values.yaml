@@ -1,0 +1,56 @@
+image:
+  tag: v1.8.0
+
+config:
+  account:
+    id: 5b8f6745-7d7f-45c8-ad85-e36ab8d03d6c
+    name: omni-cluster-operator-local
+  services:
+    api:
+      advertisedURL: http://omni.omni-system.svc.cluster.local:8080
+    kubernetesProxy:
+      advertisedURL: https://omni-k8s.omni-system.svc.cluster.local:8095
+    machineAPI:
+      advertisedURL: http://omni.omni-system.svc.cluster.local:8090
+    siderolink:
+      wireGuard:
+        advertisedEndpoint: 127.0.0.1:30180
+  auth:
+    auth0:
+      enabled: false
+    oidc:
+      enabled: true
+      providerURL: http://omni-dex.omni-system.svc.cluster.local:5556/dex
+      clientID: omni
+      clientSecret: omni-dex-secret
+      scopes:
+        - openid
+        - profile
+        - email
+      allowUnverifiedEmail: true
+    initialUsers:
+      - admin@omni.local
+    initialServiceAccount:
+      enabled: true
+      name: omni-cluster-operator
+      role: Admin
+      lifetime: 24h
+      keyPath: /data/initial-service-account-key
+  eulaAccept:
+    name: Omni Cluster Operator Tests
+    email: admin@omni.local
+
+persistence:
+  size: 2Gi
+
+service:
+  wireguard:
+    type: ClusterIP
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

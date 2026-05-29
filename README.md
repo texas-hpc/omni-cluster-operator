@@ -67,6 +67,14 @@ mise trust
 mise install
 ```
 
+There is intentionally no Makefile. The repo uses mise file tasks under
+`mise-tasks/`, so `mise run <task>` is the single local and CI entrypoint and
+tasks always run with the versions pinned in `mise.toml`.
+
+The devcontainer also installs tools through mise and recommends the VS Code mise
+extension. The packaged operator image is separate: its `Dockerfile` uses the
+pinned upstream Go builder image and a distroless runtime image.
+
 Useful tasks:
 
 ```sh
@@ -74,9 +82,23 @@ mise run generate
 mise run manifests
 mise run test-unit
 mise run test
+mise run test-e2e
+mise run lint
 mise run build
+mise run deploy
+mise run undeploy
+mise run build-installer
 mise run kind-up
+mise run cert-manager-up
+mise run version -- -f json
+mise run chart-lint
+mise run chart-template
+mise run chart-package
+mise run omni-template
+mise run omni-up
+mise run test-live-omni
 mise run tilt
+mise run omni-down
 mise run kind-down
 ```
 
@@ -86,10 +108,12 @@ non-e2e tests.
 
 ## Local Development
 
-Create a local kind cluster through `ctlptl`, then run Tilt:
+Create a local kind cluster through `ctlptl`, install cert-manager for the
+validating webhook certificates, then run Tilt:
 
 ```sh
 mise run kind-up
+mise run cert-manager-up
 mise run tilt
 ```
 
@@ -114,7 +138,35 @@ stringData:
   serviceAccountKey: "<output from omnictl serviceaccount create>"
 ```
 
+## Publishing
+
+Versions come from [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning)
+via the root `version.json`. The `Publish` GitHub Actions workflow is gated to
+`master` only and publishes:
+
+- the operator image to `ghcr.io/texas-hpc/omni-cluster-operator`
+- the Helm chart as an OCI artifact at
+  `oci://ghcr.io/texas-hpc/charts/omni-cluster-operator`
+
+Both artifacts use the same NBGV `SemVer2` value, for example
+`0.1.0-g<commit>`.
+
+Install a published chart version with:
+
+```sh
+helm install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <version> \
+  --namespace omni-cluster-operator-system \
+  --create-namespace
+```
+
 ## Operator Behavior
+
+The default deployment includes validating webhooks. They reject malformed local
+API shapes before reconciliation, including ambiguous patch or manifest sources,
+reserved worker set names, invalid machine IDs, invalid machine class sizes,
+static-only kernel args on machine-class sets, and ambiguous delete policies.
 
 `OmniCluster` is the resource with remote side effects. On reconcile it:
 
@@ -143,11 +195,30 @@ Current coverage includes:
 - cluster sync, missing-template, and delete/finalizer behavior through a fake
   Omni client
 - child resource accepted/missing-cluster status handling
-- manifest generation and controller build through standard Kubebuilder targets
+- manifest generation and controller build through mise-native Kubebuilder tasks
+- validating webhook unit coverage for per-object invariants
+- kind e2e coverage for CRD admission, webhook admission, suspended reconciliation,
+  and child status handling
 
-The e2e scaffold is present under `test/e2e` and is tagged `e2e`. The next useful
-expansion is a local Omni-compatible test double or self-hosted Omni fixture that
-can exercise the real `github.com/siderolabs/omni/client` transport.
+The e2e suite lives under `test/e2e` and is tagged `e2e`. It installs cert-manager
+because the default deployment includes validating webhooks.
+
+The optional live Omni fixture installs Omni into kind with the Sidero Helm chart
+and a local Dex OIDC provider, then verifies that a deployed operator can mark an
+`OmniConnection` ready through the real `github.com/siderolabs/omni/client`
+transport. It is intentionally separate from the default e2e suite:
+
+```sh
+mise run kind-up
+mise run omni-up
+mise run cert-manager-up
+mise run docker-build
+kind load docker-image "${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}" --name "${KIND_CLUSTER:-omni-cluster-operator-dev}"
+mise run deploy
+mise run test-live-omni
+```
+
+See [docs/local-omni-fixture.md](docs/local-omni-fixture.md).
 
 ## Notes
 

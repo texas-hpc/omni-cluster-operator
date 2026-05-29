@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Lint the Helm chart."
+set -euo pipefail
+
+helm lint charts/omni-cluster-operator

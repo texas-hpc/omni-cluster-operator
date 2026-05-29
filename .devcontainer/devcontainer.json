@@ -1,6 +1,9 @@
 {
-  "name": "Kubebuilder DevContainer",
-  "image": "golang:1.26.3",
+  "name": "Omni Cluster Operator",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "moby": false,
@@ -17,9 +20,18 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "terminal.integrated.shell.linux": "/bin/bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "mise.binPath": "/usr/local/bin/mise",
+        "mise.configureExtensionsAutomatically": true,
+        "mise.configureExtensionsAutomaticallyIncludeList": ["golang.go"],
+        "mise.configureExtensionsIncludeGlobalTools": false,
+        "mise.configureExtensionsUseShims": true,
+        "mise.updateEnvAutomatically": true,
+        "mise.updateOpenTerminalsEnvAutomatically": true
       },
       "extensions": [
+        "hverlin.mise-vscode",
+        "golang.go",
         "ms-kubernetes-tools.vscode-kubernetes-tools",
         "ms-azuretools.vscode-docker"
       ]
@@ -27,9 +39,9 @@
   },
 
   "remoteEnv": {
-    "GO111MODULE": "on"
+    "GO111MODULE": "on",
+    "PATH": "/usr/local/share/mise/shims:/usr/local/bin:${containerEnv:PATH}"
   },
 
-  "onCreateCommand": "bash .devcontainer/post-install.sh"
+  "postCreateCommand": "mise trust && mise install && mise run setup-envtest"
 }
-
