@@ -7,6 +7,8 @@ binary="${tool_dir}/nbgv"
 stamp="${tool_dir}/.nbgv-${version}"
 lock_dir="${tool_dir}.lock"
 
+mkdir -p "$(dirname "${tool_dir}")"
+
 while ! mkdir "${lock_dir}" >/dev/null 2>&1; do
   sleep 1
 done
