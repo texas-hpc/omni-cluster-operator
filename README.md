@@ -64,9 +64,11 @@ For testing an unreleased branch build, override the image tag explicitly:
 ```sh
 helm upgrade --install omni-cluster-operator \
   oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+omnictl serviceaccount create > omni-service-account.key
   --version <chart-version> \
   --namespace omni-cluster-operator-system \
-  --create-namespace \
+  --from-file=serviceAccountKey=./omni-service-account.key
+rm -f omni-service-account.key
   --set image.tag=dev
 ```
 
