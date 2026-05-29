@@ -1,0 +1,50 @@
+[tools]
+go = "1.26.3"
+kubebuilder = "4.14.0"
+kind = "0.31.0"
+ctlptl = "0.9.3"
+tilt = "0.37.3"
+kubectl = "1.36.1"
+kustomize = "5.8.1"
+golangci-lint = "2.11.4"
+omnictl = "1.8.0"
+
+[env]
+KIND_CLUSTER = "omni-cluster-operator-dev"
+IMG = "omni-cluster-operator:dev"
+
+[tasks.generate]
+description = "Generate Kubernetes deepcopy code."
+run = "make generate"
+
+[tasks.manifests]
+description = "Generate CRDs and RBAC."
+run = "make manifests"
+
+[tasks.test]
+description = "Run unit and envtest-backed tests."
+run = "make test"
+
+[tasks.test-unit]
+description = "Run fast unit tests without envtest setup."
+run = "go test ./api/... ./internal/omnitemplate/... ./internal/omniapi/... ./internal/controller/..."
+
+[tasks.build]
+description = "Build the manager binary."
+run = "make build"
+
+[tasks.kind-up]
+description = "Create the local kind cluster through ctlptl."
+run = "ctlptl apply -f hack/kind/cluster.yaml"
+
+[tasks.kind-down]
+description = "Delete the local kind cluster."
+run = "ctlptl delete -f hack/kind/cluster.yaml"
+
+[tasks.tilt]
+description = "Run the operator in the local kind cluster with Tilt."
+run = "tilt up"
+
+[tasks.samples]
+description = "Render sample CRs."
+run = "kustomize build config/samples"

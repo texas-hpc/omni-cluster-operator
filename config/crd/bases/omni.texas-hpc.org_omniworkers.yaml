@@ -1,0 +1,296 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: omniworkers.omni.texas-hpc.org
+spec:
+  group: omni.texas-hpc.org
+  names:
+    kind: OmniWorkers
+    listKind: OmniWorkersList
+    plural: omniworkers
+    singular: omniworkers
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OmniWorkers is the Schema for the omniworkers API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of OmniWorkers
+            properties:
+              annotations:
+                additionalProperties:
+                  type: string
+                description: annotations are applied to the generated Omni resource.
+                type: object
+              clusterRef:
+                description: clusterRef attaches this workers document to one OmniCluster
+                  in the same namespace.
+                properties:
+                  name:
+                    description: name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              deleteStrategy:
+                description: deleteStrategy controls machine removal when this set
+                  scales down.
+                properties:
+                  rolling:
+                    description: rolling configures rolling operation behavior.
+                    properties:
+                      maxParallelism:
+                        description: maxParallelism is the maximum number of machines
+                          to operate on in parallel.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                    type: object
+                  type:
+                    description: type is Rolling or Unset. When Unset, Omni applies
+                      the operation at once.
+                    enum:
+                    - Rolling
+                    - Unset
+                    type: string
+                type: object
+              kernelArgs:
+                description: kernelArgs are managed for static machines in this set.
+                items:
+                  type: string
+                type: array
+              labels:
+                additionalProperties:
+                  type: string
+                description: labels are applied to the generated Omni resource.
+                type: object
+              machineClass:
+                description: machineClass selects machines from an Omni MachineClass.
+                  Mutually exclusive with machines.
+                properties:
+                  name:
+                    description: name is the Omni MachineClass name.
+                    minLength: 1
+                    type: string
+                  size:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: size is a number of machines, or one of Omni's string
+                      size keywords such as unlimited.
+                    x-kubernetes-int-or-string: true
+                required:
+                - name
+                - size
+                type: object
+              machines:
+                description: machines is the explicit list of Omni machine IDs in
+                  this set. Mutually exclusive with machineClass.
+                items:
+                  type: string
+                minItems: 1
+                type: array
+              patches:
+                description: patches are applied to the generated machine set.
+                items:
+                  description: Patch is a Talos machine configuration patch reference
+                    used by Omni cluster templates.
+                  properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      description: annotations are applied to the generated config
+                        patch.
+                      type: object
+                    file:
+                      description: |-
+                        file is a patch file path relative to the OmniCluster spec.templateRoot mounted in the operator.
+                        Prefer inline for GitOps CRs unless the operator deployment mounts this file tree.
+                      type: string
+                    idOverride:
+                      description: idOverride overrides Omni's generated config patch
+                        ID.
+                      type: string
+                    inline:
+                      description: inline is a Talos strategic machine configuration
+                        patch.
+                      x-kubernetes-preserve-unknown-fields: true
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: labels are applied to the generated config patch.
+                      type: object
+                    name:
+                      description: name is the human-readable patch name.
+                      type: string
+                  type: object
+                type: array
+              systemExtensions:
+                description: systemExtensions are installed on every machine in this
+                  set.
+                items:
+                  type: string
+                type: array
+              updateStrategy:
+                description: updateStrategy controls config changes across machines
+                  in this set.
+                properties:
+                  rolling:
+                    description: rolling configures rolling operation behavior.
+                    properties:
+                      maxParallelism:
+                        description: maxParallelism is the maximum number of machines
+                          to operate on in parallel.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                    type: object
+                  type:
+                    description: type is Rolling or Unset. When Unset, Omni applies
+                      the operation at once.
+                    enum:
+                    - Rolling
+                    - Unset
+                    type: string
+                type: object
+              upgradeStrategy:
+                description: upgradeStrategy controls version, extension, and kernel
+                  arg changes across machines in this set.
+                properties:
+                  rolling:
+                    description: rolling configures rolling operation behavior.
+                    properties:
+                      maxParallelism:
+                        description: maxParallelism is the maximum number of machines
+                          to operate on in parallel.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                    type: object
+                  type:
+                    description: type is Rolling or Unset. When Unset, Omni applies
+                      the operation at once.
+                    enum:
+                    - Rolling
+                    - Unset
+                    type: string
+                type: object
+              workerSetName:
+                description: |-
+                  workerSetName is the Omni workers document name. Defaults to metadata.name when omitted.
+                  Must be unique within the cluster and cannot be control-planes.
+                pattern: ^[A-Za-z0-9_-]+$
+                type: string
+            required:
+            - clusterRef
+            type: object
+            x-kubernetes-validations:
+            - message: exactly one of machines or machineClass is required
+              rule: has(self.machines) != has(self.machineClass)
+          status:
+            description: status defines the observed state of OmniWorkers
+            properties:
+              clusterRef:
+                description: clusterRef is the last cluster reference observed by
+                  the controller.
+                type: string
+              conditions:
+                description: conditions represent the current state of the resource.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: observedGeneration is the latest generation handled by
+                  the controller.
+                format: int64
+                type: integer
+              workerSetName:
+                description: workerSetName is the Omni worker set name rendered by
+                  the controller.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1,0 +1,19 @@
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniControlPlane
+metadata:
+  labels:
+    app.kubernetes.io/name: omni-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: edge-sample-control-plane
+spec:
+  clusterRef:
+    name: edge-sample
+  machines:
+  - 11111111-1111-4111-8111-111111111111
+  patches:
+  - name: control-plane-kubespan
+    inline:
+      machine:
+        network:
+          kubespan:
+            enabled: true
