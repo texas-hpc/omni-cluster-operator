@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Install CRDs into the current Kubernetes context."
+set -euo pipefail
+
+mise run manifests
+
+out="$(kustomize build config/crd 2>/dev/null || true)"
+if [[ -z "${out}" ]]; then
+  echo "No CRDs to install; skipping."
+  exit 0
+fi
+
+printf '%s\n' "${out}" | kubectl apply -f -

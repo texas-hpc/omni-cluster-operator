@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Remove the controller manager from the current Kubernetes context."
+set -euo pipefail
+
+kustomize build config/default | kubectl delete --ignore-not-found="${IGNORE_NOT_FOUND:-${ignore_not_found:-false}}" -f -

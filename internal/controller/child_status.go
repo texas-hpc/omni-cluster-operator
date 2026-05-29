@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,9 +65,13 @@ func updateControlPlaneStatus(ctx context.Context, c client.Client, controlPlane
 			return err
 		}
 
+		originalStatus := latest.Status.DeepCopy()
 		latest.Status.ObservedGeneration = latest.Generation
 		latest.Status.ClusterRef = latest.Spec.ClusterRef.Name
 		omniv1alpha1.SetCondition(&latest.Status.Conditions, acceptedCondition(latest.Generation, latest.Spec.ClusterRef.Name, exists))
+		if reflect.DeepEqual(originalStatus, &latest.Status) {
+			return nil
+		}
 
 		return c.Status().Update(ctx, latest)
 	})
@@ -81,6 +86,7 @@ func updateWorkersStatus(ctx context.Context, c client.Client, workers *omniv1al
 			return err
 		}
 
+		originalStatus := latest.Status.DeepCopy()
 		latest.Status.ObservedGeneration = latest.Generation
 		latest.Status.ClusterRef = latest.Spec.ClusterRef.Name
 		latest.Status.WorkerSetName = latest.Spec.WorkerSetName
@@ -88,6 +94,9 @@ func updateWorkersStatus(ctx context.Context, c client.Client, workers *omniv1al
 			latest.Status.WorkerSetName = latest.Name
 		}
 		omniv1alpha1.SetCondition(&latest.Status.Conditions, acceptedCondition(latest.Generation, latest.Spec.ClusterRef.Name, exists))
+		if reflect.DeepEqual(originalStatus, &latest.Status) {
+			return nil
+		}
 
 		return c.Status().Update(ctx, latest)
 	})
@@ -102,6 +111,7 @@ func updateMachineStatus(ctx context.Context, c client.Client, machine *omniv1al
 			return err
 		}
 
+		originalStatus := latest.Status.DeepCopy()
 		latest.Status.ObservedGeneration = latest.Generation
 		latest.Status.ClusterRef = latest.Spec.ClusterRef.Name
 		latest.Status.MachineID = latest.Spec.MachineID
@@ -109,6 +119,9 @@ func updateMachineStatus(ctx context.Context, c client.Client, machine *omniv1al
 			latest.Status.MachineID = latest.Name
 		}
 		omniv1alpha1.SetCondition(&latest.Status.Conditions, acceptedCondition(latest.Generation, latest.Spec.ClusterRef.Name, exists))
+		if reflect.DeepEqual(originalStatus, &latest.Status) {
+			return nil
+		}
 
 		return c.Status().Update(ctx, latest)
 	})

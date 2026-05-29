@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Build the manager binary."
+set -euo pipefail
+
+mise run manifests
+mise run generate
+mise run fmt
+mise run vet
+
+go build -o bin/manager cmd/main.go

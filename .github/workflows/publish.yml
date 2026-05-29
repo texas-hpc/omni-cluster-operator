@@ -10,7 +10,7 @@ permissions: {}
 
 concurrency:
   group: publish-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -39,21 +39,26 @@ jobs:
           cache: true
           experimental: true
 
+      - name: Restore repo-local cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: bin
+          key: ${{ runner.os }}-${{ github.workflow }}-local-tools-${{ hashFiles('mise.toml', 'mise-tasks/**', 'hack/mise/**', '.custom-gcl.yml', 'go.mod', 'go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ github.workflow }}-local-tools-
+
       - name: Compute NBGV version
         id: version
         run: |
-          version="$(nbgv get-version -v SemVer2)"
-          app_version="$(nbgv get-version -v AssemblyInformationalVersion)"
-          short_sha="$(nbgv get-version -v GitCommitIdShort)"
+          version="$(hack/mise/nbgv get-version -v SemVer2)"
+          app_version="$(hack/mise/nbgv get-version -v AssemblyInformationalVersion)"
+          short_sha="$(hack/mise/nbgv get-version -v GitCommitIdShort)"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "app_version=${app_version}" >> "${GITHUB_OUTPUT}"
           echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify before publishing
         run: mise run ci
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -67,6 +72,7 @@ jobs:
 
       - name: Build and push operator image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        timeout-minutes: 20
         with:
           context: .
           file: ./Dockerfile
@@ -76,6 +82,8 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.version.outputs.short_sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           labels: |
             org.opencontainers.image.title=omni-cluster-operator
             org.opencontainers.image.description=Kubernetes operator for Sidero Omni cluster lifecycles

@@ -22,7 +22,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
@@ -62,7 +64,10 @@ func (r *OmniWorkersReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager sets up the controller with the Manager.
 func (r *OmniWorkersReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&omniv1alpha1.OmniWorkers{}).
+		For(&omniv1alpha1.OmniWorkers{}, builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniCluster{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []ctrl.Request {
+			return workersRequestsForCluster(ctx, r.Client, object)
+		}), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Named("omniworkers").
 		Complete(r)
 }

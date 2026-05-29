@@ -1,0 +1,106 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-omni-texas-hpc-org-v1alpha1-omnicluster
+  failurePolicy: Fail
+  name: vomnicluster-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - omni.texas-hpc.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - omniclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-omni-texas-hpc-org-v1alpha1-omniconnection
+  failurePolicy: Fail
+  name: vomniconnection-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - omni.texas-hpc.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - omniconnections
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-omni-texas-hpc-org-v1alpha1-omnicontrolplane
+  failurePolicy: Fail
+  name: vomnicontrolplane-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - omni.texas-hpc.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - omnicontrolplanes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-omni-texas-hpc-org-v1alpha1-omnimachine
+  failurePolicy: Fail
+  name: vomnimachine-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - omni.texas-hpc.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - omnimachines
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-omni-texas-hpc-org-v1alpha1-omniworkers
+  failurePolicy: Fail
+  name: vomniworkers-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - omni.texas-hpc.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - omniworkers
+  sideEffects: None

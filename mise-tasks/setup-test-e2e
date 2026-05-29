@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Create the isolated kind cluster used by e2e tests."
+set -euo pipefail
+
+cluster="${E2E_KIND_CLUSTER:-omni-cluster-operator-test-e2e}"
+if kind get clusters | grep -Fxq "${cluster}"; then
+  echo "kind cluster '${cluster}' already exists"
+  exit 0
+fi
+
+kind create cluster --name "${cluster}"

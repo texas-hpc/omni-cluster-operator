@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#MISE description="Run kind-backed e2e tests."
+set -euo pipefail
+
+cleanup() {
+  status=$?
+  mise run cleanup-test-e2e || true
+  exit "${status}"
+}
+trap cleanup EXIT
+
+mise run setup-test-e2e
+mise run manifests
+mise run generate
+mise run fmt
+mise run vet
+
+KIND_CLUSTER="${E2E_KIND_CLUSTER:-omni-cluster-operator-test-e2e}" go test -tags=e2e ./test/e2e/ -v -ginkgo.v

@@ -27,13 +27,13 @@ metrics:
     enabled: true
 
 webhook:
-  enabled: false
+  enabled: true
   port: 9443
   failurePolicy: Fail
   certDir: /tmp/k8s-webhook-server/serving-certs
 
 certManager:
-  enabled: false
+  enabled: true
 
 rbac:
   create: true

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#MISE description="Install the optional local Omni live-test fixture into the current Kubernetes context."
+set -euo pipefail
+
+namespace="${OMNI_NAMESPACE:-omni-system}"
+chart_version="${OMNI_CHART_VERSION:-2.8.0}"
+omni_version="${OMNI_VERSION:-v1.8.0}"
+key_file="$(hack/omni/generate-etcd-key .local/omni/omni.asc)"
+
+kubectl create namespace "${namespace}" --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f hack/omni/dex.yaml
+kubectl wait deployment/omni-dex -n "${namespace}" --for=condition=Available --timeout=2m
+
+helm upgrade --install omni oci://ghcr.io/siderolabs/charts/omni \
+  --namespace "${namespace}" \
+  --version "${chart_version}" \
+  --values hack/omni/values.yaml \
+  --set "image.tag=${omni_version}" \
+  --set-file "etcdEncryptionKey.omniAsc=${key_file}"
+
+kubectl rollout status deployment/omni -n "${namespace}" --timeout=5m
+hack/omni/wait-for-initial-service-account

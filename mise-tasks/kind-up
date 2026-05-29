@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Create the local kind cluster through ctlptl."
+set -euo pipefail
+
+ctlptl apply -f hack/kind/cluster.yaml

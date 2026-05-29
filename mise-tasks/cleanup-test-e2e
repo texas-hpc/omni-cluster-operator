@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Delete the isolated kind cluster used by e2e tests."
+set -euo pipefail
+
+kind delete cluster --name "${E2E_KIND_CLUSTER:-omni-cluster-operator-test-e2e}"

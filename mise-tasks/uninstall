@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Uninstall CRDs from the current Kubernetes context."
+set -euo pipefail
+
+mise run manifests
+
+out="$(kustomize build config/crd 2>/dev/null || true)"
+if [[ -z "${out}" ]]; then
+  echo "No CRDs to delete; skipping."
+  exit 0
+fi
+
+printf '%s\n' "${out}" | kubectl delete --ignore-not-found="${IGNORE_NOT_FOUND:-${ignore_not_found:-false}}" -f -
