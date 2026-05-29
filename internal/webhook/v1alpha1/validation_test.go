@@ -28,6 +28,11 @@ import (
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 )
 
+const (
+	validationClusterName = "edge"
+	validationWorkersName = "workers"
+)
+
 func TestOmniClusterValidation(t *testing.T) {
 	t.Parallel()
 
@@ -65,7 +70,7 @@ func TestMachineSetValidation(t *testing.T) {
 	controlPlane := &omniv1alpha1.OmniControlPlane{
 		ObjectMeta: metav1.ObjectMeta{Name: "cp"},
 		Spec: omniv1alpha1.OmniControlPlaneSpec{
-			ClusterRef: omniv1alpha1.OmniClusterRef{Name: "edge"},
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: validationClusterName},
 			MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 				MachineClass: &omniv1alpha1.MachineClass{Name: "cp", Size: intstr.FromInt32(0)},
 			},
@@ -94,9 +99,9 @@ func TestMachineSetValidation(t *testing.T) {
 
 	workersValidator := &OmniWorkersCustomValidator{}
 	workers := &omniv1alpha1.OmniWorkers{
-		ObjectMeta: metav1.ObjectMeta{Name: "workers"},
+		ObjectMeta: metav1.ObjectMeta{Name: validationWorkersName},
 		Spec: omniv1alpha1.OmniWorkersSpec{
-			ClusterRef:     omniv1alpha1.OmniClusterRef{Name: "edge"},
+			ClusterRef:     omniv1alpha1.OmniClusterRef{Name: validationClusterName},
 			WorkerSetName:  "control-planes",
 			UpdateStrategy: &omniv1alpha1.UpdateStrategy{Type: "Rolling"},
 			MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
@@ -115,7 +120,7 @@ func TestMachineValidation(t *testing.T) {
 	machine := &omniv1alpha1.OmniMachine{
 		ObjectMeta: metav1.ObjectMeta{Name: "friendly-name"},
 		Spec: omniv1alpha1.OmniMachineSpec{
-			ClusterRef: omniv1alpha1.OmniClusterRef{Name: "edge"},
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: validationClusterName},
 		},
 	}
 
@@ -160,7 +165,7 @@ func TestConnectionWarnings(t *testing.T) {
 
 func validCluster() *omniv1alpha1.OmniCluster {
 	return &omniv1alpha1.OmniCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "edge"},
+		ObjectMeta: metav1.ObjectMeta{Name: validationClusterName},
 		Spec: omniv1alpha1.OmniClusterSpec{
 			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "omni"},
 			Kubernetes: omniv1alpha1.KubernetesSpec{

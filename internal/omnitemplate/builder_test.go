@@ -27,6 +27,12 @@ import (
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 )
 
+const (
+	staticClusterName       = "edge"
+	machineClassClusterName = "elastic"
+	workersName             = "workers"
+)
+
 func TestRenderAndValidateStaticTemplate(t *testing.T) {
 	t.Parallel()
 
@@ -35,7 +41,7 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 	workerID := "22222222-2222-4222-8222-222222222222"
 	result, err := Render(Inputs{
 		Cluster: &omniv1alpha1.OmniCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: "edge"},
+			ObjectMeta: metav1.ObjectMeta{Name: staticClusterName},
 			Spec: omniv1alpha1.OmniClusterSpec{
 				Kubernetes: omniv1alpha1.KubernetesSpec{
 					Version: "v1.35.0",
@@ -60,7 +66,7 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 		ControlPlane: &omniv1alpha1.OmniControlPlane{
 			ObjectMeta: metav1.ObjectMeta{Name: "edge-control-plane"},
 			Spec: omniv1alpha1.OmniControlPlaneSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: "edge"},
+				ClusterRef: omniv1alpha1.OmniClusterRef{Name: staticClusterName},
 				MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 					Machines: []string{controlPlaneID},
 				},
@@ -69,7 +75,7 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 		Workers: []omniv1alpha1.OmniWorkers{{
 			ObjectMeta: metav1.ObjectMeta{Name: "gpu"},
 			Spec: omniv1alpha1.OmniWorkersSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: "edge"},
+				ClusterRef: omniv1alpha1.OmniClusterRef{Name: staticClusterName},
 				MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 					Machines: []string{workerID},
 				},
@@ -80,8 +86,8 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 			},
 		}},
 		Machines: []omniv1alpha1.OmniMachine{
-			machine(controlPlaneID, "edge"),
-			machine(workerID, "edge"),
+			machine(controlPlaneID, staticClusterName),
+			machine(workerID, staticClusterName),
 		},
 	})
 	if err != nil {
@@ -118,7 +124,7 @@ func TestRenderAndValidateMachineClassTemplate(t *testing.T) {
 
 	result, err := Render(Inputs{
 		Cluster: &omniv1alpha1.OmniCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: "elastic"},
+			ObjectMeta: metav1.ObjectMeta{Name: machineClassClusterName},
 			Spec: omniv1alpha1.OmniClusterSpec{
 				Kubernetes: omniv1alpha1.KubernetesSpec{Version: "v1.35.0"},
 				Talos:      omniv1alpha1.TalosSpec{Version: "v1.13.2"},
@@ -127,7 +133,7 @@ func TestRenderAndValidateMachineClassTemplate(t *testing.T) {
 		ControlPlane: &omniv1alpha1.OmniControlPlane{
 			ObjectMeta: metav1.ObjectMeta{Name: "cp"},
 			Spec: omniv1alpha1.OmniControlPlaneSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: "elastic"},
+				ClusterRef: omniv1alpha1.OmniClusterRef{Name: machineClassClusterName},
 				MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 					MachineClass: &omniv1alpha1.MachineClass{
 						Name: "control-plane",
@@ -137,9 +143,9 @@ func TestRenderAndValidateMachineClassTemplate(t *testing.T) {
 			},
 		},
 		Workers: []omniv1alpha1.OmniWorkers{{
-			ObjectMeta: metav1.ObjectMeta{Name: "workers"},
+			ObjectMeta: metav1.ObjectMeta{Name: workersName},
 			Spec: omniv1alpha1.OmniWorkersSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: "elastic"},
+				ClusterRef: omniv1alpha1.OmniClusterRef{Name: machineClassClusterName},
 				MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 					MachineClass: &omniv1alpha1.MachineClass{
 						Name: "gpu-workers",
