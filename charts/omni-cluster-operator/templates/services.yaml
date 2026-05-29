@@ -1,0 +1,44 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "omni-cluster-operator.metricsServiceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "omni-cluster-operator.labels" . | nindent 4 }}
+    control-plane: controller-manager
+    {{- with .Values.metrics.service.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ports:
+    - name: https
+      port: {{ .Values.metrics.port }}
+      protocol: TCP
+      targetPort: {{ .Values.metrics.port }}
+  selector:
+    {{- include "omni-cluster-operator.selectorLabels" . | nindent 4 }}
+{{- end }}
+{{- if and .Values.metrics.enabled .Values.webhook.enabled }}
+---
+{{- end }}
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "omni-cluster-operator.webhookServiceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "omni-cluster-operator.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: {{ .Values.webhook.port }}
+  selector:
+    {{- include "omni-cluster-operator.selectorLabels" . | nindent 4 }}
+{{- end }}

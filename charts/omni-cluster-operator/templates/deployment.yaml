@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "omni-cluster-operator.fullname" . }}-controller-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "omni-cluster-operator.labels" . | nindent 4 }}
+    control-plane: controller-manager
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "omni-cluster-operator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+      labels:
+        {{- include "omni-cluster-operator.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "omni-cluster-operator.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: manager
+          image: {{ include "omni-cluster-operator.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /manager
+          args:
+            {{- if .Values.metrics.enabled }}
+            - --metrics-bind-address=:{{ .Values.metrics.port }}
+            - --metrics-secure={{ .Values.metrics.secure }}
+            {{- end }}
+            {{- if .Values.leaderElection.enabled }}
+            - --leader-elect
+            {{- end }}
+            - --health-probe-bind-address={{ .Values.healthProbe.bindAddress }}
+            {{- if .Values.webhook.enabled }}
+            - --webhook-cert-path={{ .Values.webhook.certDir }}
+            {{- end }}
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.healthProbe.port }}
+              name: health
+              protocol: TCP
+            {{- if .Values.webhook.enabled }}
+            - containerPort: {{ .Values.webhook.port }}
+              name: webhook-server
+              protocol: TCP
+            {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.healthProbe.port }}
+            initialDelaySeconds: {{ .Values.healthProbe.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthProbe.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.healthProbe.port }}
+            initialDelaySeconds: {{ .Values.healthProbe.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthProbe.readiness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if or .Values.webhook.enabled .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- if .Values.webhook.enabled }}
+            - mountPath: {{ .Values.webhook.certDir }}
+              name: webhook-certs
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+      {{- if or .Values.webhook.enabled .Values.extraVolumes }}
+      volumes:
+        {{- if .Values.webhook.enabled }}
+        - name: webhook-certs
+          secret:
+            secretName: {{ include "omni-cluster-operator.webhookSecretName" . }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}

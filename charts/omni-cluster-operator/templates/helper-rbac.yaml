@@ -1,0 +1,83 @@
+{{- if and .Values.rbac.create .Values.rbac.helperRoles.create }}
+{{- $resources := list
+  (dict "resource" "omniclusters" "name" "omnicluster")
+  (dict "resource" "omniconnections" "name" "omniconnection")
+  (dict "resource" "omnicontrolplanes" "name" "omnicontrolplane")
+  (dict "resource" "omnimachines" "name" "omnimachine")
+  (dict "resource" "omniworkers" "name" "omniworkers")
+}}
+{{- range $entry := $resources }}
+{{- $resource := $entry.resource }}
+{{- $name := $entry.name }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "omni-cluster-operator.fullname" $ }}-{{ $name }}-admin-role
+  labels:
+    {{- include "omni-cluster-operator.labels" $ | nindent 4 }}
+rules:
+  - apiGroups:
+      - omni.texas-hpc.org
+    resources:
+      - {{ $resource }}
+    verbs:
+      - '*'
+  - apiGroups:
+      - omni.texas-hpc.org
+    resources:
+      - {{ $resource }}/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "omni-cluster-operator.fullname" $ }}-{{ $name }}-editor-role
+  labels:
+    {{- include "omni-cluster-operator.labels" $ | nindent 4 }}
+rules:
+  - apiGroups:
+      - omni.texas-hpc.org
+    resources:
+      - {{ $resource }}
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - omni.texas-hpc.org
+    resources:
+      - {{ $resource }}/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "omni-cluster-operator.fullname" $ }}-{{ $name }}-viewer-role
+  labels:
+    {{- include "omni-cluster-operator.labels" $ | nindent 4 }}
+rules:
+  - apiGroups:
+      - omni.texas-hpc.org
+    resources:
+      - {{ $resource }}
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - omni.texas-hpc.org
+    resources:
+      - {{ $resource }}/status
+    verbs:
+      - get
+{{- if not (eq $resource "omniworkers") }}
+---
+{{- end }}
+{{- end }}
+{{- end }}
