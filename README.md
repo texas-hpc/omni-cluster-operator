@@ -21,7 +21,7 @@ Use this when you want:
 You need:
 
 - a Kubernetes cluster where the operator will run
-- Helm 3
+- Helm 3 or newer
 - access to an Omni instance
 - an Omni service account key from `omnictl serviceaccount create`
 
