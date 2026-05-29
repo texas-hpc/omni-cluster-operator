@@ -1,17 +1,156 @@
-# omni-cluster-operator
+# omni-cluster-operator 🚀
 
-`omni-cluster-operator` is a Kubernetes operator for managing Sidero Omni cluster
-lifecycles from Kubernetes-native custom resources. It lets GitOps define Omni
-connections, cluster template documents, and cluster deletion policy while the
-controller renders and syncs an Omni cluster template through Sidero's Go client.
+Manage Sidero Omni cluster templates from Kubernetes.
 
-The operator is intentionally downstream of Omni's published client module instead
-of reimplementing Omni reconciliation. It renders a deterministic template from
-CRDs, validates it with `github.com/siderolabs/omni/client/pkg/template/operations`,
-syncs it with `SyncTemplate`, reads status with `StatusCluster`, and removes remote
-template resources with `DeleteCluster` from a Kubernetes finalizer.
+`omni-cluster-operator` gives platform teams a GitOps-friendly way to define Omni
+connections, cluster templates, machine groups, and deletion policy with normal
+Kubernetes custom resources. The controller renders those resources into an Omni
+cluster template, asks Omni to validate it, syncs it, and reports status back on
+the Kubernetes objects you already know how to inspect.
 
-## API Shape
+Use this when you want:
+
+- 🧭 One Kubernetes-native API for Omni cluster lifecycle configuration.
+- 🔐 Omni credentials stored in Kubernetes Secrets, not committed to Git.
+- 🧩 Separate resources for the cluster, control plane, workers, and static machines.
+- 🧹 Finalizer-based cleanup, with an orphan option when you want to keep the Omni
+  cluster after deleting Kubernetes resources.
+
+## ⚡ Quick Start
+
+You need:
+
+- a Kubernetes cluster where the operator will run
+- Helm 3 or newer
+- cert-manager installed in the target cluster
+- access to an Omni instance
+- an Omni service account key from `omnictl serviceaccount create`
+
+### 1. Install the Operator
+
+Install the operator with Helm from the GHCR OCI chart registry:
+
+```sh
+helm install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <chart-version> \
+  --namespace omni-cluster-operator-system \
+  --create-namespace
+```
+
+Choose a chart version from the
+[GitHub Packages page](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator).
+The chart installs the operator deployment, RBAC, services, CRDs, validating
+webhooks, and cert-manager certificate resources. The manager image tag follows
+the chart app version unless you override it.
+
+Inspect chart defaults before installing:
+
+```sh
+helm show values \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <chart-version>
+```
+
+If GHCR prompts for credentials, log in with a GitHub token that can read the
+package:
+
+```sh
+echo "$GITHUB_TOKEN" | helm registry login ghcr.io \
+  --username <github-user> \
+  --password-stdin
+```
+
+For testing an unreleased branch build, override the image tag explicitly:
+
+```sh
+helm upgrade --install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <chart-version> \
+  --namespace omni-cluster-operator-system \
+  --create-namespace \
+  --set image.tag=dev
+```
+
+### 2. Add Omni Credentials
+
+Create the Omni service account key in the namespace where your `OmniConnection`
+and cluster template resources will live. The Secret must not be committed to Git.
+
+```sh
+kubectl create namespace clusters
+
+kubectl create secret generic omni-service-account \
+  --namespace clusters \
+  --from-literal=serviceAccountKey='<output from omnictl serviceaccount create>'
+```
+
+### 3. Create Your First Cluster Template
+
+Then apply an `OmniConnection`, one `OmniCluster`, exactly one
+`OmniControlPlane`, and any `OmniWorkers` or `OmniMachine` documents for that
+cluster:
+
+```yaml
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniConnection
+metadata:
+  name: omni
+  namespace: clusters
+spec:
+  endpoint: https://omni.example.com
+  auth:
+    serviceAccountSecretRef:
+      name: omni-service-account
+      key: serviceAccountKey
+---
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniCluster
+metadata:
+  name: edge
+  namespace: clusters
+spec:
+  connectionRef:
+    name: omni
+  kubernetes:
+    version: v1.35.0
+  talos:
+    version: v1.13.2
+  syncInterval: 5m
+---
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniControlPlane
+metadata:
+  name: edge-control-plane
+  namespace: clusters
+spec:
+  clusterRef:
+    name: edge
+  machines:
+    - 11111111-1111-4111-8111-111111111111
+---
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniWorkers
+metadata:
+  name: edge-workers
+  namespace: clusters
+spec:
+  clusterRef:
+    name: edge
+  machines:
+    - 22222222-2222-4222-8222-222222222222
+```
+
+Check reconciliation status with:
+
+```sh
+kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines \
+  --namespace clusters
+
+kubectl describe omnicluster edge --namespace clusters
+```
+
+## 🧱 API Shape
 
 The API group is `omni.texas-hpc.org/v1alpha1`.
 
@@ -33,7 +172,10 @@ Child resources use `spec.clusterRef.name` instead of duplicating
 keeps all template documents for one cluster bound to one connection and avoids
 ambiguous cross-Omni machine ownership.
 
-## Upstream Omni Boundary
+## 🤝 Upstream Omni Boundary
+
+The operator intentionally keeps Omni as the source of truth for template behavior.
+It does not try to reimplement Omni's reconciliation rules locally.
 
 Sidero publishes `github.com/siderolabs/omni/client`, including the gRPC/API
 packages, COSI resource types, and public template operation functions. The actual
@@ -58,7 +200,7 @@ References:
 - [Omni Go client module](https://pkg.go.dev/github.com/siderolabs/omni/client)
 - [Omni template operations package](https://pkg.go.dev/github.com/siderolabs/omni/client/pkg/template/operations)
 
-## Tooling
+## 🛠️ Tooling
 
 Install pinned tools through `mise`:
 
@@ -106,7 +248,7 @@ mise run kind-down
 `mise run test` runs the generated manifests/code, formatting, vet, and all
 non-e2e tests.
 
-## Local Development
+## 💻 Local Development
 
 Create a local kind cluster through `ctlptl`, install cert-manager for the
 validating webhook certificates, then run Tilt:
@@ -138,7 +280,7 @@ stringData:
   serviceAccountKey: "<output from omnictl serviceaccount create>"
 ```
 
-## Publishing
+## 📦 Publishing
 
 Versions come from [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning)
 via the root `version.json`. The `Publish` GitHub Actions workflow is gated to
@@ -160,7 +302,7 @@ helm install omni-cluster-operator \
   --create-namespace
 ```
 
-## Operator Behavior
+## 🔄 Operator Behavior
 
 The default deployment includes validating webhooks. They reject malformed local
 API shapes before reconciliation, including ambiguous patch or manifest sources,
@@ -184,7 +326,7 @@ static-only kernel args on machine-class sets, and ambiguous delete policies.
 service account key can list Omni cluster resources. Child document controllers
 report whether their referenced `OmniCluster` exists.
 
-## Testing
+## ✅ Testing
 
 Current coverage includes:
 
@@ -219,7 +361,7 @@ mise run test-live-omni
 
 See [docs/local-omni-fixture.md](docs/local-omni-fixture.md).
 
-## Notes
+## 📝 Notes
 
 This project uses Kubebuilder/controller-runtime directly. Operator SDK's own FAQ
 describes Go Operator SDK projects as Kubebuilder-based and sharing the same
