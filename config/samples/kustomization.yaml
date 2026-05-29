@@ -1,0 +1,9 @@
+## Append samples of your project ##
+resources:
+- omni-service-account-secret.yaml
+- omni_v1alpha1_omniconnection.yaml
+- omni_v1alpha1_omnicluster.yaml
+- omni_v1alpha1_omnicontrolplane.yaml
+- omni_v1alpha1_omnimachine.yaml
+- omni_v1alpha1_omniworkers.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

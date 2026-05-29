@@ -1,0 +1,21 @@
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniWorkers
+metadata:
+  labels:
+    app.kubernetes.io/name: omni-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: edge-sample-workers
+spec:
+  clusterRef:
+    name: edge-sample
+  workerSetName: gpu-workers
+  machines:
+  - 22222222-2222-4222-8222-222222222222
+  updateStrategy:
+    type: Rolling
+    rolling:
+      maxParallelism: 1
+  upgradeStrategy:
+    type: Rolling
+    rolling:
+      maxParallelism: 1

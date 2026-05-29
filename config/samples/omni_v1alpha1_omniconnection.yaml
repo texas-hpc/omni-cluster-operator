@@ -1,0 +1,13 @@
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniConnection
+metadata:
+  labels:
+    app.kubernetes.io/name: omni-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: omni-sample
+spec:
+  endpoint: https://omni.example.com
+  auth:
+    serviceAccountSecretRef:
+      name: omni-service-account
+      key: serviceAccountKey

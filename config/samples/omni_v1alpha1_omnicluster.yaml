@@ -1,0 +1,25 @@
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: omni-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: edge-sample
+spec:
+  connectionRef:
+    name: omni-sample
+  kubernetes:
+    version: v1.35.0
+    manifests:
+    - name: sample-namespace
+      mode: full
+      inline:
+      - apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: apps
+  talos:
+    version: v1.13.2
+  features:
+    enableWorkloadProxy: true
+  syncInterval: 5m
