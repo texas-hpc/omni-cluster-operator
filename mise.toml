@@ -8,13 +8,13 @@ kubectl = "1.36.1"
 kustomize = "5.8.1"
 helm = "3.21.0"
 dotnet = "10.0.300"
+"dotnet:nbgv" = "3.9.50"
 golangci-lint = "2.11.4"
 omnictl = "1.8.0"
 
 [env]
 KIND_CLUSTER = "omni-cluster-operator-dev"
 IMG = "omni-cluster-operator:dev"
-NBGV_VERSION = "3.9.50"
 
 [tasks.generate]
 description = "Generate Kubernetes deepcopy code."
@@ -63,7 +63,7 @@ run = "helm template omni-cluster-operator charts/omni-cluster-operator --includ
 [tasks.chart-package]
 description = "Package the Helm chart using the NBGV version."
 run = '''
-chart_version="${CHART_VERSION:-$(hack/mise/nbgv get-version -v SemVer2)}"
+chart_version="${CHART_VERSION:-$(nbgv get-version -v SemVer2)}"
 app_version="${APP_VERSION:-${chart_version}}"
 mkdir -p dist/charts
 helm package charts/omni-cluster-operator \
