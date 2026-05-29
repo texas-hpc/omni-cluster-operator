@@ -1,17 +1,31 @@
-# omni-cluster-operator
+# omni-cluster-operator 🚀
 
-`omni-cluster-operator` is a Kubernetes operator for managing Sidero Omni cluster
-lifecycles from Kubernetes-native custom resources. It lets GitOps define Omni
-connections, cluster template documents, and cluster deletion policy while the
-controller renders and syncs an Omni cluster template through Sidero's Go client.
+Manage Sidero Omni cluster templates from Kubernetes.
 
-The operator is intentionally downstream of Omni's published client module instead
-of reimplementing Omni reconciliation. It renders a deterministic template from
-CRDs, validates it with `github.com/siderolabs/omni/client/pkg/template/operations`,
-syncs it with `SyncTemplate`, reads status with `StatusCluster`, and removes remote
-template resources with `DeleteCluster` from a Kubernetes finalizer.
+`omni-cluster-operator` gives platform teams a GitOps-friendly way to define Omni
+connections, cluster templates, machine groups, and deletion policy with normal
+Kubernetes custom resources. The controller renders those resources into an Omni
+cluster template, asks Omni to validate it, syncs it, and reports status back on
+the Kubernetes objects you already know how to inspect.
 
-## Installation
+Use this when you want:
+
+- 🧭 One Kubernetes-native API for Omni cluster lifecycle configuration.
+- 🔐 Omni credentials stored in Kubernetes Secrets, not committed to Git.
+- 🧩 Separate resources for the cluster, control plane, workers, and static machines.
+- 🧹 Finalizer-based cleanup, with an orphan option when you want to keep the Omni
+  cluster after deleting Kubernetes resources.
+
+## ⚡ Quick Start
+
+You need:
+
+- a Kubernetes cluster where the operator will run
+- Helm 3
+- access to an Omni instance
+- an Omni service account key from `omnictl serviceaccount create`
+
+### 1. Install the Operator
 
 Install the operator with Helm from the GHCR OCI chart registry:
 
@@ -56,7 +70,7 @@ helm upgrade --install omni-cluster-operator \
   --set image.tag=dev
 ```
 
-## First Cluster Resources
+### 2. Add Omni Credentials
 
 Create the Omni service account key in the namespace where your `OmniConnection`
 and cluster template resources will live. The Secret must not be committed to Git.
@@ -68,6 +82,8 @@ kubectl create secret generic omni-service-account \
   --namespace clusters \
   --from-literal=serviceAccountKey='<output from omnictl serviceaccount create>'
 ```
+
+### 3. Create Your First Cluster Template
 
 Then apply an `OmniConnection`, one `OmniCluster`, exactly one
 `OmniControlPlane`, and any `OmniWorkers` or `OmniMachine` documents for that
@@ -132,7 +148,7 @@ kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachi
 kubectl describe omnicluster edge --namespace clusters
 ```
 
-## API Shape
+## 🧱 API Shape
 
 The API group is `omni.texas-hpc.org/v1alpha1`.
 
@@ -154,7 +170,10 @@ Child resources use `spec.clusterRef.name` instead of duplicating
 keeps all template documents for one cluster bound to one connection and avoids
 ambiguous cross-Omni machine ownership.
 
-## Upstream Omni Boundary
+## 🤝 Upstream Omni Boundary
+
+The operator intentionally keeps Omni as the source of truth for template behavior.
+It does not try to reimplement Omni's reconciliation rules locally.
 
 Sidero publishes `github.com/siderolabs/omni/client`, including the gRPC/API
 packages, COSI resource types, and public template operation functions. The actual
@@ -179,7 +198,7 @@ References:
 - [Omni Go client module](https://pkg.go.dev/github.com/siderolabs/omni/client)
 - [Omni template operations package](https://pkg.go.dev/github.com/siderolabs/omni/client/pkg/template/operations)
 
-## Tooling
+## 🛠️ Tooling
 
 Install pinned tools through `mise`:
 
@@ -205,7 +224,7 @@ mise run kind-down
 `mise run test` runs the generated manifests/code, formatting, vet, and all
 non-e2e tests.
 
-## Local Development
+## 💻 Local Development
 
 Create a local kind cluster through `ctlptl`, then run Tilt:
 
@@ -235,7 +254,7 @@ stringData:
   serviceAccountKey: "<output from omnictl serviceaccount create>"
 ```
 
-## Operator Behavior
+## 🔄 Operator Behavior
 
 `OmniCluster` is the resource with remote side effects. On reconcile it:
 
@@ -254,7 +273,7 @@ stringData:
 service account key can list Omni cluster resources. Child document controllers
 report whether their referenced `OmniCluster` exists.
 
-## Testing
+## ✅ Testing
 
 Current coverage includes:
 
@@ -270,7 +289,7 @@ The e2e scaffold is present under `test/e2e` and is tagged `e2e`. The next usefu
 expansion is a local Omni-compatible test double or self-hosted Omni fixture that
 can exercise the real `github.com/siderolabs/omni/client` transport.
 
-## Notes
+## 📝 Notes
 
 This project uses Kubebuilder/controller-runtime directly. Operator SDK's own FAQ
 describes Go Operator SDK projects as Kubebuilder-based and sharing the same
