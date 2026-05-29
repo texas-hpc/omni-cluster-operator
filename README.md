@@ -93,7 +93,7 @@ mise run kind-up
 mise run tilt
 ```
 
-The Tilt setup builds `omni-cluster-operator:dev`, applies the default Kustomize
+The Tilt setup builds `controller:latest`, applies the default Kustomize
 deployment, and exposes the health endpoint on port `8081`.
 
 Apply the sample CRs only after replacing the placeholder service account key:
