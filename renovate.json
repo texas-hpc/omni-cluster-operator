@@ -1,0 +1,99 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "timezone": "America/Chicago",
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "postUpdateOptions": ["gomodTidy"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update Makefile kustomize install version",
+      "fileMatch": ["(^|/)Makefile$"],
+      "matchStrings": ["KUSTOMIZE_VERSION \\?= (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "go",
+      "depNameTemplate": "sigs.k8s.io/kustomize/kustomize/v5"
+    },
+    {
+      "customType": "regex",
+      "description": "Update Makefile controller-gen install version",
+      "fileMatch": ["(^|/)Makefile$"],
+      "matchStrings": ["CONTROLLER_TOOLS_VERSION \\?= (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "go",
+      "depNameTemplate": "sigs.k8s.io/controller-tools"
+    },
+    {
+      "customType": "regex",
+      "description": "Update Makefile golangci-lint install version",
+      "fileMatch": ["(^|/)Makefile$"],
+      "matchStrings": ["GOLANGCI_LINT_VERSION \\?= (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "go",
+      "depNameTemplate": "github.com/golangci/golangci-lint/v2"
+    },
+    {
+      "customType": "regex",
+      "description": "Update custom golangci-lint plugin builder version",
+      "fileMatch": ["(^|/)\\.custom-gcl\\.yml$"],
+      "matchStrings": ["version: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "go",
+      "depNameTemplate": "github.com/golangci/golangci-lint/v2"
+    },
+    {
+      "customType": "regex",
+      "description": "Update Nerdbank.GitVersioning CLI version",
+      "fileMatch": ["(^|/)mise\\.toml$", "(^|/)hack/mise/nbgv$"],
+      "matchStrings": ["NBGV_VERSION = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"", "NBGV_VERSION:-(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "nuget",
+      "depNameTemplate": "nbgv",
+      "versioningTemplate": "nuget"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Keep Kubernetes Go modules together",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["k8s.io/**", "sigs.k8s.io/controller-runtime", "sigs.k8s.io/apiserver-network-proxy/**"],
+      "groupName": "kubernetes go modules",
+      "separateMinorPatch": false
+    },
+    {
+      "description": "Keep Sidero and Talos Go modules together",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/siderolabs/**"],
+      "groupName": "siderolabs go modules",
+      "separateMinorPatch": false
+    },
+    {
+      "description": "Keep test libraries together",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/onsi/ginkgo/**", "github.com/onsi/gomega"],
+      "groupName": "go test libraries"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Group container base image updates",
+      "matchDatasources": ["docker"],
+      "groupName": "container base images"
+    },
+    {
+      "description": "Group local developer tool updates",
+      "matchManagers": ["mise"],
+      "groupName": "local developer tools"
+    },
+    {
+      "description": "Do not automerge major dependency upgrades",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ]
+}
