@@ -6,12 +6,15 @@ ctlptl = "0.9.3"
 tilt = "0.37.3"
 kubectl = "1.36.1"
 kustomize = "5.8.1"
+helm = "3.21.0"
+dotnet = "10.0.300"
 golangci-lint = "2.11.4"
 omnictl = "1.8.0"
 
 [env]
 KIND_CLUSTER = "omni-cluster-operator-dev"
 IMG = "omni-cluster-operator:dev"
+NBGV_VERSION = "3.9.50"
 
 [tasks.generate]
 description = "Generate Kubernetes deepcopy code."
@@ -48,3 +51,27 @@ run = "tilt up"
 [tasks.samples]
 description = "Render sample CRs."
 run = "kustomize build config/samples"
+
+[tasks.chart-lint]
+description = "Lint the Helm chart."
+run = "helm lint charts/omni-cluster-operator"
+
+[tasks.chart-template]
+description = "Render the Helm chart with CRDs."
+run = "helm template omni-cluster-operator charts/omni-cluster-operator --include-crds"
+
+[tasks.chart-package]
+description = "Package the Helm chart using the NBGV version."
+run = '''
+chart_version="${CHART_VERSION:-$(hack/mise/nbgv get-version -v SemVer2)}"
+app_version="${APP_VERSION:-${chart_version}}"
+mkdir -p dist/charts
+helm package charts/omni-cluster-operator \
+  --destination dist/charts \
+  --version "${chart_version}" \
+  --app-version "${app_version}"
+'''
+
+[tasks.ci]
+description = "Run the checks required before publishing."
+run = "mise run test && mise run build && mise run samples && mise run chart-lint && mise run chart-template"

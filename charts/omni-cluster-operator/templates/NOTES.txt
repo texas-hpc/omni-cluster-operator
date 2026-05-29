@@ -1,0 +1,4 @@
+The Omni Cluster Operator has been installed into namespace {{ .Release.Namespace }}.
+
+Published image:
+  {{ include "omni-cluster-operator.image" . }}
