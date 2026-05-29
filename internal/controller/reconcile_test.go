@@ -35,7 +35,12 @@ import (
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 )
 
-const testClusterName = "edge"
+const (
+	testClusterName = "edge"
+	testNamespace   = "default"
+	testMachineName = "node-1"
+	testWorkersName = "workers"
+)
 
 type fakeOmni struct {
 	pingErr        error
@@ -84,7 +89,7 @@ func TestOmniClusterDoesNotDestroyMachinesDuringNormalSync(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
@@ -114,7 +119,7 @@ func TestOmniClusterReconcilesTemplateToOmni(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
@@ -160,7 +165,7 @@ func TestOmniClusterMissingControlPlaneDoesNotSync(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
@@ -199,7 +204,7 @@ func TestOmniClusterDeleteCallsOmniFinalizer(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -228,7 +233,7 @@ func TestOmniClusterDeletePassesDestroyMachines(t *testing.T) {
 		Build()
 
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: testClusterName}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -248,7 +253,7 @@ func TestChildControllerMarksMissingCluster(t *testing.T) {
 	ctx := context.Background()
 	scheme := testScheme(t)
 	machine := &omniv1alpha1.OmniMachine{
-		ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testMachineName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniMachineSpec{
 			ClusterRef: omniv1alpha1.OmniClusterRef{Name: "missing"},
 		},
@@ -260,7 +265,7 @@ func TestChildControllerMarksMissingCluster(t *testing.T) {
 		Build()
 
 	reconciler := &OmniMachineReconciler{Client: k8sClient, Scheme: scheme}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "node-1"}}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testMachineName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -312,7 +317,7 @@ func TestChildRequestsForCluster(t *testing.T) {
 	otherControlPlane.Spec.ClusterRef.Name = "other"
 	workers := testWorkers()
 	machine := &omniv1alpha1.OmniMachine{
-		ObjectMeta: metav1.ObjectMeta{Name: "node-1", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testMachineName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniMachineSpec{
 			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
 		},
@@ -329,12 +334,12 @@ func TestChildRequestsForCluster(t *testing.T) {
 	}
 
 	workersRequests := workersRequestsForCluster(ctx, k8sClient, cluster)
-	if len(workersRequests) != 1 || workersRequests[0].Name != "workers" {
+	if len(workersRequests) != 1 || workersRequests[0].Name != testWorkersName {
 		t.Fatalf("workersRequests = %#v, want [workers]", workersRequests)
 	}
 
 	machineRequests := machineRequestsForCluster(ctx, k8sClient, cluster)
-	if len(machineRequests) != 1 || machineRequests[0].Name != "node-1" {
+	if len(machineRequests) != 1 || machineRequests[0].Name != testMachineName {
 		t.Fatalf("machineRequests = %#v, want [node-1]", machineRequests)
 	}
 }
@@ -355,7 +360,7 @@ func testScheme(t *testing.T) *runtime.Scheme {
 
 func testConnection() *omniv1alpha1.OmniConnection {
 	return &omniv1alpha1.OmniConnection{
-		ObjectMeta: metav1.ObjectMeta{Name: "omni", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "omni", Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniConnectionSpec{
 			Endpoint: "https://omni.example.test",
 			Auth: omniv1alpha1.OmniAuthSpec{
@@ -370,7 +375,7 @@ func testConnection() *omniv1alpha1.OmniConnection {
 
 func testCluster() *omniv1alpha1.OmniCluster {
 	return &omniv1alpha1.OmniCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: testClusterName, Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testClusterName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniClusterSpec{
 			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "omni"},
 			Kubernetes:    omniv1alpha1.KubernetesSpec{Version: "v1.35.0"},
@@ -381,7 +386,7 @@ func testCluster() *omniv1alpha1.OmniCluster {
 
 func testControlPlane() *omniv1alpha1.OmniControlPlane {
 	return &omniv1alpha1.OmniControlPlane{
-		ObjectMeta: metav1.ObjectMeta{Name: "edge-cp", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "edge-cp", Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniControlPlaneSpec{
 			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
 			MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
@@ -396,12 +401,12 @@ func testControlPlane() *omniv1alpha1.OmniControlPlane {
 
 func testWorkers() *omniv1alpha1.OmniWorkers {
 	return &omniv1alpha1.OmniWorkers{
-		ObjectMeta: metav1.ObjectMeta{Name: "workers", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: testWorkersName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniWorkersSpec{
 			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
 			MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 				MachineClass: &omniv1alpha1.MachineClass{
-					Name: "workers",
+					Name: testWorkersName,
 					Size: intstr.FromString("unlimited"),
 				},
 			},

@@ -40,7 +40,7 @@
       "customType": "regex",
       "description": "Update custom golangci-lint plugin builder version",
       "fileMatch": ["(^|/)\\.custom-gcl\\.yml$"],
-      "matchStrings": ["version: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"],
+      "matchStrings": ["^version: (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"],
       "datasourceTemplate": "go",
       "depNameTemplate": "github.com/golangci/golangci-lint/v2"
     },
