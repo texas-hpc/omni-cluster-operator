@@ -50,9 +50,9 @@ jobs:
       - name: Compute NBGV version
         id: version
         run: |
-          version="$(hack/mise/nbgv get-version -v SemVer2)"
-          app_version="$(hack/mise/nbgv get-version -v AssemblyInformationalVersion)"
-          short_sha="$(hack/mise/nbgv get-version -v GitCommitIdShort)"
+          version="$(nbgv get-version -v SemVer2)"
+          app_version="$(nbgv get-version -v AssemblyInformationalVersion)"
+          short_sha="$(nbgv get-version -v GitCommitIdShort)"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "app_version=${app_version}" >> "${GITHUB_OUTPUT}"
           echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
