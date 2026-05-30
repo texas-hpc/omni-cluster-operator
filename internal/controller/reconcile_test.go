@@ -19,8 +19,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 )
 
@@ -51,6 +55,17 @@ type fakeOmni struct {
 	syncCalls      int
 	deleteCalls    []string
 	deleteOptions  []omniapi.SyncOptions
+}
+
+type fakeCiliumRenderer struct {
+	manifest []byte
+	calls    int
+	err      error
+}
+
+func (f *fakeCiliumRenderer) Render(context.Context, *omniv1alpha1.OmniCilium) ([]byte, bool, error) {
+	f.calls++
+	return append([]byte(nil), f.manifest...), true, f.err
 }
 
 func (f *fakeOmni) Ping(_ context.Context, connection *omniv1alpha1.OmniConnection) (string, error) {
@@ -149,6 +164,72 @@ func TestOmniClusterReconcilesTemplateToOmni(t *testing.T) {
 	}
 	if cluster.Status.ClusterName != testClusterName {
 		t.Fatalf("ClusterName = %q, want edge", cluster.Status.ClusterName)
+	}
+}
+
+func TestOmniClusterIncludesRenderedCiliumManifest(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	install := testCilium()
+	specHash, err := cilium.SpecHash(install)
+	if err != nil {
+		t.Fatalf("SpecHash() error = %v", err)
+	}
+	manifest := []byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-system
+`)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cilium.RenderedManifestSecretName(install),
+			Namespace: testNamespace,
+			Labels:    cilium.RenderedManifestLabels(install),
+			Annotations: map[string]string{
+				cilium.RenderedManifestSpecHashKey: specHash,
+			},
+		},
+		Data: map[string][]byte{
+			cilium.RenderedManifestSecretKey: manifest,
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniCilium{}).
+		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), install, secret).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	rendered := string(omni.syncedTemplate)
+	for _, want := range []string{
+		"name: cilium",
+		"disable-default-cni-for-cilium",
+		"kind: Namespace",
+		"disabled: true",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered template missing %q:\n%s", want, rendered)
+		}
+	}
+
+	cluster := &omniv1alpha1.OmniCluster{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
+		t.Fatalf("get cluster: %v", err)
+	}
+	if cluster.Status.CiliumRef != install.Name {
+		t.Fatalf("CiliumRef = %q, want %q", cluster.Status.CiliumRef, install.Name)
 	}
 }
 
@@ -280,6 +361,86 @@ func TestChildControllerMarksMissingCluster(t *testing.T) {
 	}
 }
 
+func TestOmniCiliumCachesRenderedManifest(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	renderer := &fakeCiliumRenderer{
+		manifest: []byte(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-system
+`),
+	}
+	install := testCilium()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCilium{}).
+		WithObjects(testCluster(), install).
+		Build()
+
+	reconciler := &OmniCiliumReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: install.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	if renderer.calls != 1 {
+		t.Fatalf("renderer calls = %d, want 1", renderer.calls)
+	}
+
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{Namespace: testNamespace, Name: cilium.RenderedManifestSecretName(install)}
+	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
+		t.Fatalf("get rendered manifest secret: %v", err)
+	}
+	if len(secret.Data[cilium.RenderedManifestSecretKey]) == 0 {
+		t.Fatal("rendered manifest secret is empty")
+	}
+
+	updated := &omniv1alpha1.OmniCilium{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get cilium: %v", err)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Ready condition = %#v, want True", got)
+	}
+}
+
+func TestOmniCiliumRenderFailureMarksReadyFalse(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	renderer := &fakeCiliumRenderer{err: fmt.Errorf("chart unavailable")}
+	install := testCilium()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCilium{}).
+		WithObjects(testCluster(), install).
+		Build()
+
+	reconciler := &OmniCiliumReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: install.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &omniv1alpha1.OmniCilium{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get cilium: %v", err)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
+		t.Fatalf("Ready condition = %#v, want False", got)
+	}
+}
+
 func TestSpecOrDeletionChangedPredicateIgnoresStatusOnlyUpdates(t *testing.T) {
 	t.Parallel()
 
@@ -341,6 +502,11 @@ func TestChildRequestsForCluster(t *testing.T) {
 	machineRequests := machineRequestsForCluster(ctx, k8sClient, cluster)
 	if len(machineRequests) != 1 || machineRequests[0].Name != testMachineName {
 		t.Fatalf("machineRequests = %#v, want [node-1]", machineRequests)
+	}
+
+	ciliumRequests := ciliumRequestsForCluster(ctx, k8sClient, cluster)
+	if len(ciliumRequests) != 0 {
+		t.Fatalf("ciliumRequests = %#v, want []", ciliumRequests)
 	}
 }
 
@@ -410,6 +576,19 @@ func testWorkers() *omniv1alpha1.OmniWorkers {
 					Size: intstr.FromString("unlimited"),
 				},
 			},
+		},
+	}
+}
+
+func testCilium() *omniv1alpha1.OmniCilium {
+	return &omniv1alpha1.OmniCilium{
+		ObjectMeta: metav1.ObjectMeta{Name: "edge-cilium", Namespace: testNamespace},
+		Spec: omniv1alpha1.OmniCiliumSpec{
+			ClusterRef:   omniv1alpha1.OmniClusterRef{Name: testClusterName},
+			ChartVersion: "1.19.3",
+			Values: &apiextensionsv1.JSON{Raw: []byte(`{
+				"kubeProxyReplacement": true
+			}`)},
 		},
 	}
 }

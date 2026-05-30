@@ -75,6 +75,22 @@ func machineRequestsForCluster(ctx context.Context, c client.Client, object clie
 	return sortRequests(requests)
 }
 
+func ciliumRequestsForCluster(ctx context.Context, c client.Client, object client.Object) []reconcile.Request {
+	ciliumList := &omniv1alpha1.OmniCiliumList{}
+	if err := c.List(ctx, ciliumList, client.InNamespace(object.GetNamespace())); err != nil {
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, install := range ciliumList.Items {
+		if install.Spec.ClusterRef.Name == object.GetName() {
+			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: install.Namespace, Name: install.Name}})
+		}
+	}
+
+	return sortRequests(requests)
+}
+
 func sortRequests(requests []reconcile.Request) []reconcile.Request {
 	sort.Slice(requests, func(i, j int) bool {
 		return strings.Compare(requests[i].String(), requests[j].String()) < 0

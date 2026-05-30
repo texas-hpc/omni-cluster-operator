@@ -34,6 +34,8 @@ const (
 	ConditionReachable = "Reachable"
 	// ConditionAccepted reports whether a child template document is attached to an OmniCluster.
 	ConditionAccepted = "Accepted"
+	// ConditionRendered reports whether a generated artifact has been rendered and cached.
+	ConditionRendered = "Rendered"
 	// ConditionValidated reports whether the assembled Omni cluster template validates.
 	ConditionValidated = "Validated"
 	// ConditionSynced reports whether the desired template is synced to Omni.
@@ -49,6 +51,8 @@ const (
 	ReasonMissingSecret     = "MissingSecret"
 	ReasonMissingTemplate   = "MissingTemplate"
 	ReasonReconcileFailed   = "ReconcileFailed"
+	ReasonRendered          = "Rendered"
+	ReasonRenderFailed      = "RenderFailed"
 	ReasonStatusFailed      = "StatusFailed"
 	ReasonSuspended         = "Suspended"
 	ReasonSyncFailed        = "SyncFailed"

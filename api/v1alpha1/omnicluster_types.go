@@ -94,6 +94,10 @@ type OmniClusterStatus struct {
 	// machineRefs are the machine documents selected for the last rendered template.
 	// +optional
 	MachineRefs []string `json:"machineRefs,omitempty"`
+
+	// ciliumRef is the Cilium installation selected for the last rendered template.
+	// +optional
+	CiliumRef string `json:"ciliumRef,omitempty"`
 }
 
 // +kubebuilder:object:root=true

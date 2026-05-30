@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"net/url"
 	"slices"
 	"strings"
 
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 )
 
 const validationGroup = "omni.texas-hpc.org"
@@ -91,6 +93,26 @@ func validateMachine(machine *omniv1alpha1.OmniMachine) field.ErrorList {
 	}
 
 	allErrs = append(allErrs, validatePatches(specPath.Child("patches"), machine.Spec.Patches)...)
+
+	return allErrs
+}
+
+func validateCilium(install *omniv1alpha1.OmniCilium) field.ErrorList {
+	specPath := field.NewPath("spec")
+	var allErrs field.ErrorList
+
+	if strings.TrimSpace(install.Spec.ChartVersion) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("chartVersion"), "chartVersion is required"))
+	}
+	if install.Spec.ChartRepository != "" {
+		parsed, err := url.Parse(install.Spec.ChartRepository)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("chartRepository"), install.Spec.ChartRepository, "chartRepository must be an absolute URL"))
+		}
+	}
+	if _, _, err := cilium.Values(install); err != nil {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("values"), install.Spec.Values, err.Error()))
+	}
 
 	return allErrs
 }

@@ -175,11 +175,44 @@ The API group is `omni.texas-hpc.org/v1alpha1`.
   sets may reference the same `OmniCluster`.
 - `OmniMachine` defines an optional Omni `Machine` template document for static
   machines, including install disk and per-machine patches.
+- `OmniCilium` renders a pinned Cilium Helm chart once per spec hash, stores the
+  raw manifest in a Secret, and includes that manifest in the parent
+  `OmniCluster` template.
 
 Child resources use `spec.clusterRef.name` instead of duplicating
 `OmniConnectionRef`; the owning `OmniCluster` selects the Omni instance. This
 keeps all template documents for one cluster bound to one connection and avoids
 ambiguous cross-Omni machine ownership.
+
+## Cilium Through Omni
+
+Omni manifest sync applies raw Kubernetes manifests after the workload cluster API
+is available. It does not run Helm in Omni. `OmniCilium` handles that gap by
+rendering the Cilium chart in the operator, caching the generated YAML in a Secret
+to avoid per-reconcile Helm randomness, then adding a single Omni manifest sync
+entry to the cluster template.
+
+The Cilium child also injects the Talos machine config patch required by Cilium:
+`cluster.network.cni.name: none`. When `spec.values.kubeProxyReplacement` is
+`true`, it also injects `cluster.proxy.disabled: true`.
+
+```yaml
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniCilium
+metadata:
+  name: edge-cilium
+  namespace: clusters
+spec:
+  clusterRef:
+    name: edge
+  chartVersion: 1.19.3
+  values:
+    kubeProxyReplacement: true
+    gatewayAPI:
+      enabled: true
+      enableAlpn: true
+      enableAppProtocol: true
+```
 
 ## 🤝 Upstream Omni Boundary
 
