@@ -31,6 +31,7 @@ const (
 	staticClusterName       = "edge"
 	machineClassClusterName = "elastic"
 	workersName             = "workers"
+	testManifestMode        = "full"
 )
 
 func TestRenderAndValidateStaticTemplate(t *testing.T) {
@@ -47,7 +48,7 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 					Version: "v1.35.0",
 					Manifests: []omniv1alpha1.KubernetesManifest{{
 						Name: "namespace",
-						Mode: "full",
+						Mode: testManifestMode,
 						Inline: []apiextensionsv1.JSON{{
 							Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"apps"}}`),
 						}},
@@ -89,6 +90,15 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 			machine(controlPlaneID, staticClusterName),
 			machine(workerID, staticClusterName),
 		},
+		Cilium: &CiliumInput{
+			ResourceName:         "edge-cilium",
+			ManifestName:         "cilium",
+			Mode:                 testManifestMode,
+			KubeProxyReplacement: true,
+			Manifest: []apiextensionsv1.JSON{{
+				Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"kube-system"}}`),
+			}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
@@ -104,6 +114,9 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 		"kind: Machine",
 		"maxParallelism: 2",
 		"kind: Namespace",
+		"disable-default-cni-for-cilium",
+		"proxy:",
+		"disabled: true",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered template missing %q:\n%s", want, rendered)

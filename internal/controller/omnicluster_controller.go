@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omnitemplate"
 )
@@ -54,7 +56,8 @@ type OmniClusterReconciler struct {
 // +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omnicontrolplanes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniworkers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omnimachines,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get
+// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniciliums,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *OmniClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -268,11 +271,70 @@ func (r *OmniClusterReconciler) templateInputs(ctx context.Context, cluster *omn
 		}
 	}
 
+	ciliumInput, err := r.ciliumInput(ctx, cluster)
+	if err != nil {
+		return omnitemplate.Inputs{}, err
+	}
+
 	return omnitemplate.Inputs{
 		Cluster:      cluster,
 		ControlPlane: &selectedControlPlanes[0],
 		Workers:      workers,
 		Machines:     machines,
+		Cilium:       ciliumInput,
+	}, nil
+}
+
+func (r *OmniClusterReconciler) ciliumInput(ctx context.Context, cluster *omniv1alpha1.OmniCluster) (*omnitemplate.CiliumInput, error) {
+	ciliumList := &omniv1alpha1.OmniCiliumList{}
+	if err := r.List(ctx, ciliumList, client.InNamespace(cluster.Namespace)); err != nil {
+		return nil, err
+	}
+
+	var selected []omniv1alpha1.OmniCilium
+	for _, item := range ciliumList.Items {
+		if item.Spec.ClusterRef.Name == cluster.Name {
+			selected = append(selected, item)
+		}
+	}
+	if len(selected) == 0 {
+		return nil, nil
+	}
+	if len(selected) > 1 {
+		return nil, fmt.Errorf("expected at most one OmniCilium referencing %s/%s, found %d", cluster.Namespace, cluster.Name, len(selected))
+	}
+
+	install := selected[0]
+	specHash, err := cilium.SpecHash(&install)
+	if err != nil {
+		return nil, fmt.Errorf("OmniCilium %q is invalid: %w", install.Name, err)
+	}
+
+	secret := &corev1.Secret{}
+	secretKey := client.ObjectKey{Namespace: install.Namespace, Name: cilium.RenderedManifestSecretName(&install)}
+	if err := r.Get(ctx, secretKey, secret); err != nil {
+		return nil, fmt.Errorf("OmniCilium %q has no rendered manifest Secret %q: %w", install.Name, secretKey.Name, err)
+	}
+	if !cilium.SecretHasCurrentManifest(secret, secret.Data, specHash) {
+		return nil, fmt.Errorf("OmniCilium %q rendered manifest Secret %q is not current", install.Name, secretKey.Name)
+	}
+
+	objects, err := cilium.ParseRenderedManifest(secret.Data[cilium.RenderedManifestSecretKey])
+	if err != nil {
+		return nil, fmt.Errorf("parse OmniCilium %q rendered manifest: %w", install.Name, err)
+	}
+
+	_, kubeProxyReplacement, err := cilium.Values(&install)
+	if err != nil {
+		return nil, fmt.Errorf("OmniCilium %q is invalid: %w", install.Name, err)
+	}
+
+	return &omnitemplate.CiliumInput{
+		ResourceName:         install.Name,
+		ManifestName:         cilium.ManifestName(&install),
+		Mode:                 cilium.Mode(&install),
+		Manifest:             objects,
+		KubeProxyReplacement: kubeProxyReplacement,
 	}, nil
 }
 
@@ -322,6 +384,7 @@ func setRenderedStatus(status *omniv1alpha1.OmniClusterStatus, cluster *omniv1al
 	status.ControlPlaneRef = rendered.ControlPlaneRef
 	status.WorkersRefs = rendered.WorkersRefs
 	status.MachineRefs = rendered.MachineRefs
+	status.CiliumRef = rendered.CiliumRef
 }
 
 func syncInterval(cluster *omniv1alpha1.OmniCluster) time.Duration {
@@ -349,6 +412,8 @@ func (r *OmniClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&omniv1alpha1.OmniControlPlane{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Watches(&omniv1alpha1.OmniWorkers{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Watches(&omniv1alpha1.OmniMachine{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniCilium{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersForCiliumSecret)).
 		Named("omnicluster").
 		Complete(r)
 }
@@ -360,6 +425,8 @@ func requestForChildCluster(_ context.Context, object client.Object) []reconcile
 	case *omniv1alpha1.OmniWorkers:
 		return requestForClusterRef(object.GetNamespace(), typed.Spec.ClusterRef.Name)
 	case *omniv1alpha1.OmniMachine:
+		return requestForClusterRef(object.GetNamespace(), typed.Spec.ClusterRef.Name)
+	case *omniv1alpha1.OmniCilium:
 		return requestForClusterRef(object.GetNamespace(), typed.Spec.ClusterRef.Name)
 	default:
 		return nil
@@ -386,6 +453,26 @@ func (r *OmniClusterReconciler) clustersForConnection(ctx context.Context, objec
 	for _, cluster := range clusterList.Items {
 		if cluster.Spec.ConnectionRef.Name == object.GetName() {
 			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: cluster.Namespace, Name: cluster.Name}})
+		}
+	}
+
+	return sortRequests(requests)
+}
+
+func (r *OmniClusterReconciler) clustersForCiliumSecret(ctx context.Context, object client.Object) []reconcile.Request {
+	if object.GetLabels()[cilium.RenderedManifestOwnerLabel] == "" {
+		return nil
+	}
+
+	ciliumList := &omniv1alpha1.OmniCiliumList{}
+	if err := r.List(ctx, ciliumList, client.InNamespace(object.GetNamespace())); err != nil {
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, install := range ciliumList.Items {
+		if cilium.RenderedManifestSecretName(&install) == object.GetName() {
+			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: install.Namespace, Name: install.Spec.ClusterRef.Name}})
 		}
 	}
 

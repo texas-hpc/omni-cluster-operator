@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 )
 
 type childStatusClient struct {
@@ -119,6 +120,59 @@ func updateMachineStatus(ctx context.Context, c client.Client, machine *omniv1al
 			latest.Status.MachineID = latest.Name
 		}
 		omniv1alpha1.SetCondition(&latest.Status.Conditions, acceptedCondition(latest.Generation, latest.Spec.ClusterRef.Name, exists))
+		if reflect.DeepEqual(originalStatus, &latest.Status) {
+			return nil
+		}
+
+		return c.Status().Update(ctx, latest)
+	})
+}
+
+func updateCiliumStatus(ctx context.Context, c client.Client, install *omniv1alpha1.OmniCilium, exists bool, rendered bool, manifestHash string, renderErr error) error {
+	key := client.ObjectKeyFromObject(install)
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &omniv1alpha1.OmniCilium{}
+		if err := c.Get(ctx, key, latest); err != nil {
+			return err
+		}
+
+		_, kubeProxyReplacement, valuesErr := cilium.Values(latest)
+		secretName := cilium.RenderedManifestSecretName(latest)
+
+		originalStatus := latest.Status.DeepCopy()
+		latest.Status.ObservedGeneration = latest.Generation
+		latest.Status.ClusterRef = latest.Spec.ClusterRef.Name
+		latest.Status.ChartVersion = latest.Spec.ChartVersion
+		latest.Status.ManifestName = cilium.ManifestName(latest)
+		latest.Status.KubeProxyReplacement = kubeProxyReplacement
+		latest.Status.RenderedManifestSecretRef = secretName
+		latest.Status.RenderedManifestHash = manifestHash
+		if rendered {
+			now := metav1.Now()
+			latest.Status.LastRenderTime = &now
+		}
+
+		omniv1alpha1.SetCondition(&latest.Status.Conditions, acceptedCondition(latest.Generation, latest.Spec.ClusterRef.Name, exists))
+		switch {
+		case valuesErr != nil:
+			message := valuesErr.Error()
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionRendered, metav1.ConditionFalse, latest.Generation, omniv1alpha1.ReasonRenderFailed, message))
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionFalse, latest.Generation, omniv1alpha1.ReasonRenderFailed, message))
+		case renderErr != nil:
+			message := renderErr.Error()
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionRendered, metav1.ConditionFalse, latest.Generation, omniv1alpha1.ReasonRenderFailed, message))
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionFalse, latest.Generation, omniv1alpha1.ReasonRenderFailed, message))
+		case !exists:
+			message := fmt.Sprintf("OmniCluster %q does not exist", latest.Spec.ClusterRef.Name)
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionRendered, metav1.ConditionFalse, latest.Generation, omniv1alpha1.ReasonMissingCluster, message))
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionFalse, latest.Generation, omniv1alpha1.ReasonMissingCluster, message))
+		default:
+			message := fmt.Sprintf("rendered Cilium chart %q into Secret %q", latest.Spec.ChartVersion, secretName)
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionRendered, metav1.ConditionTrue, latest.Generation, omniv1alpha1.ReasonRendered, message))
+			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionTrue, latest.Generation, omniv1alpha1.ReasonRendered, message))
+		}
+
 		if reflect.DeepEqual(originalStatus, &latest.Status) {
 			return nil
 		}

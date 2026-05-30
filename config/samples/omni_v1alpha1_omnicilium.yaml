@@ -1,0 +1,17 @@
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniCilium
+metadata:
+  labels:
+    app.kubernetes.io/name: omni-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: edge-sample-cilium
+spec:
+  clusterRef:
+    name: edge-sample
+  chartVersion: 1.19.3
+  values:
+    kubeProxyReplacement: true
+    gatewayAPI:
+      enabled: true
+      enableAlpn: true
+      enableAppProtocol: true

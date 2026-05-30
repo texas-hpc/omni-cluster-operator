@@ -52,10 +52,17 @@ rules:
     resources:
       - secrets
     verbs:
+      - create
+      - delete
       - get
+      - list
+      - patch
+      - update
+      - watch
   - apiGroups:
       - omni.texas-hpc.org
     resources:
+      - omniciliums
       - omniclusters
       - omniconnections
       - omnicontrolplanes
@@ -72,6 +79,7 @@ rules:
   - apiGroups:
       - omni.texas-hpc.org
     resources:
+      - omniciliums/finalizers
       - omniclusters/finalizers
       - omniconnections/finalizers
       - omnicontrolplanes/finalizers
@@ -82,6 +90,7 @@ rules:
   - apiGroups:
       - omni.texas-hpc.org
     resources:
+      - omniciliums/status
       - omniclusters/status
       - omniconnections/status
       - omnicontrolplanes/status

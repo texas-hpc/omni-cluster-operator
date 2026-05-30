@@ -16,6 +16,26 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
+        path: /validate-omni-texas-hpc-org-v1alpha1-omnicilium
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    name: vomnicilium-v1alpha1.kb.io
+    rules:
+      - apiGroups:
+          - omni.texas-hpc.org
+        apiVersions:
+          - v1alpha1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - omniciliums
+    sideEffects: None
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: {{ include "omni-cluster-operator.webhookServiceName" . }}
+        namespace: {{ .Release.Namespace }}
         path: /validate-omni-texas-hpc-org-v1alpha1-omnicluster
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomnicluster-v1alpha1.kb.io

@@ -228,6 +228,10 @@ spec:
           status:
             description: status defines the observed state of OmniCluster
             properties:
+              ciliumRef:
+                description: ciliumRef is the Cilium installation selected for the
+                  last rendered template.
+                type: string
               clusterName:
                 description: clusterName is the Omni cluster name.
                 type: string
