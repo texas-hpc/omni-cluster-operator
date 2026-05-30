@@ -40,9 +40,12 @@ rules:
       - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: {{ ternary "ClusterRole" "Role" .Values.watchAllNamespaces }}
 metadata:
   name: {{ include "omni-cluster-operator.fullname" . }}-manager-role
+  {{- if not .Values.watchAllNamespaces }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
   labels:
     {{- include "omni-cluster-operator.labels" . | nindent 4 }}
 rules:
@@ -142,14 +145,17 @@ subjects:
     namespace: {{ .Release.Namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: {{ ternary "ClusterRoleBinding" "RoleBinding" .Values.watchAllNamespaces }}
 metadata:
   name: {{ include "omni-cluster-operator.fullname" . }}-manager-rolebinding
+  {{- if not .Values.watchAllNamespaces }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
   labels:
     {{- include "omni-cluster-operator.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: {{ ternary "ClusterRole" "Role" .Values.watchAllNamespaces }}
   name: {{ include "omni-cluster-operator.fullname" . }}-manager-role
 subjects:
   - kind: ServiceAccount
