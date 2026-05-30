@@ -302,6 +302,19 @@ helm install omni-cluster-operator \
   --create-namespace
 ```
 
+By default, the Helm chart runs in namespaced mode: the manager watches only the
+release namespace and receives namespace-scoped RBAC for Omni custom resources
+and referenced Secrets. To run one operator instance across all namespaces, set:
+
+```sh
+helm upgrade --install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --version <version> \
+  --namespace omni-cluster-operator-system \
+  --create-namespace \
+  --set watchAllNamespaces=true
+```
+
 ## 🔄 Operator Behavior
 
 The default deployment includes validating webhooks. They reject malformed local
