@@ -37,8 +37,9 @@ import (
 // OmniConnectionReconciler reconciles a OmniConnection object
 type OmniConnectionReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Omni   omniapi.Client
+	Scheme       *runtime.Scheme
+	SecretReader client.Reader
+	Omni         omniapi.Client
 }
 
 // +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniconnections,verbs=get;list;watch;create;update;patch;delete
@@ -91,7 +92,12 @@ func (r *OmniConnectionReconciler) omniClient() omniapi.Client {
 		return r.Omni
 	}
 
-	return &omniapi.RealClient{K8sClient: r.Client}
+	secretReader := r.SecretReader
+	if secretReader == nil {
+		secretReader = r.Client
+	}
+
+	return &omniapi.RealClient{K8sClient: secretReader}
 }
 
 func (r *OmniConnectionReconciler) updateConnectionStatus(ctx context.Context, connection *omniv1alpha1.OmniConnection, mutate func(*omniv1alpha1.OmniConnectionStatus)) error {
