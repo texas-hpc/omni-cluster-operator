@@ -109,6 +109,7 @@ func TestOmniClusterDoesNotDestroyMachinesDuringNormalSync(t *testing.T) {
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
 	}
+
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("second Reconcile() error = %v", err)
 	}
@@ -208,6 +209,7 @@ metadata:
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
 	}
+
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("second Reconcile() error = %v", err)
 	}
@@ -251,6 +253,7 @@ func TestOmniClusterMissingControlPlaneDoesNotSync(t *testing.T) {
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
 	}
+
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("second Reconcile() error = %v", err)
 	}
@@ -386,6 +389,14 @@ metadata:
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
 	}
+	firstStatus := &omniv1alpha1.OmniCilium{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, firstStatus); err != nil {
+		t.Fatalf("get cilium after first reconcile: %v", err)
+	}
+	if firstStatus.Status.LastRenderTime == nil {
+		t.Fatal("LastRenderTime is nil after render")
+	}
+
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
 		t.Fatalf("second Reconcile() error = %v", err)
 	}
@@ -409,6 +420,9 @@ metadata:
 	}
 	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
 		t.Fatalf("Ready condition = %#v, want True", got)
+	}
+	if updated.Status.LastRenderTime == nil || !updated.Status.LastRenderTime.Equal(firstStatus.Status.LastRenderTime) {
+		t.Fatalf("LastRenderTime = %v, want cache hit to preserve %v", updated.Status.LastRenderTime, firstStatus.Status.LastRenderTime)
 	}
 }
 
@@ -438,6 +452,45 @@ func TestOmniCiliumRenderFailureMarksReadyFalse(t *testing.T) {
 	}
 	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
 		t.Fatalf("Ready condition = %#v, want False", got)
+	}
+}
+
+func TestOmniClusterWaitsForPendingCiliumRender(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	install := testCilium()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniCilium{}).
+		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), install).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	result, err := reconciler.Reconcile(ctx, request)
+	if err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+	if result.RequeueAfter == 0 {
+		t.Fatal("RequeueAfter is zero, want soft retry while Cilium render is pending")
+	}
+	if omni.syncCalls != 0 {
+		t.Fatalf("syncCalls = %d, want 0 while Cilium render is pending", omni.syncCalls)
+	}
+
+	cluster := &omniv1alpha1.OmniCluster{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
+		t.Fatalf("get cluster: %v", err)
+	}
+	if got := meta.FindStatusCondition(cluster.Status.Conditions, omniv1alpha1.ConditionReady); got != nil && got.Reason == omniv1alpha1.ReasonMissingTemplate {
+		t.Fatalf("Ready condition = %#v, want no hard missing-template failure while Cilium render is pending", got)
 	}
 }
 

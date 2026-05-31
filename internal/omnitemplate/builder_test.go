@@ -31,6 +31,9 @@ const (
 	staticClusterName       = "edge"
 	machineClassClusterName = "elastic"
 	workersName             = "workers"
+	testKubernetesVersion   = "v1.35.0"
+	testTalosVersion        = "v1.13.2"
+	testCiliumManifestName  = "cilium"
 	testManifestMode        = "full"
 )
 
@@ -45,7 +48,7 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: staticClusterName},
 			Spec: omniv1alpha1.OmniClusterSpec{
 				Kubernetes: omniv1alpha1.KubernetesSpec{
-					Version: "v1.35.0",
+					Version: testKubernetesVersion,
 					Manifests: []omniv1alpha1.KubernetesManifest{{
 						Name: "namespace",
 						Mode: testManifestMode,
@@ -54,7 +57,7 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 						}},
 					}},
 				},
-				Talos: omniv1alpha1.TalosSpec{Version: "v1.13.2"},
+				Talos: omniv1alpha1.TalosSpec{Version: testTalosVersion},
 				Features: &omniv1alpha1.ClusterFeatures{
 					EnableWorkloadProxy: true,
 				},
@@ -92,7 +95,7 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 		},
 		Cilium: &CiliumInput{
 			ResourceName:         "edge-cilium",
-			ManifestName:         "cilium",
+			ManifestName:         testCiliumManifestName,
 			Mode:                 testManifestMode,
 			KubeProxyReplacement: true,
 			Manifest: []apiextensionsv1.JSON{{
@@ -139,8 +142,8 @@ func TestRenderAndValidateMachineClassTemplate(t *testing.T) {
 		Cluster: &omniv1alpha1.OmniCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: machineClassClusterName},
 			Spec: omniv1alpha1.OmniClusterSpec{
-				Kubernetes: omniv1alpha1.KubernetesSpec{Version: "v1.35.0"},
-				Talos:      omniv1alpha1.TalosSpec{Version: "v1.13.2"},
+				Kubernetes: omniv1alpha1.KubernetesSpec{Version: testKubernetesVersion},
+				Talos:      omniv1alpha1.TalosSpec{Version: testTalosVersion},
 			},
 		},
 		ControlPlane: &omniv1alpha1.OmniControlPlane{
@@ -179,6 +182,48 @@ func TestRenderAndValidateMachineClassTemplate(t *testing.T) {
 
 	if err := Validate(result.Template, ""); err != nil {
 		t.Fatalf("Validate() error = %v\n%s", err, rendered)
+	}
+}
+
+func TestRenderRejectsDuplicateCiliumManifestName(t *testing.T) {
+	t.Parallel()
+
+	_, err := Render(Inputs{
+		Cluster: &omniv1alpha1.OmniCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: staticClusterName},
+			Spec: omniv1alpha1.OmniClusterSpec{
+				Kubernetes: omniv1alpha1.KubernetesSpec{
+					Version: testKubernetesVersion,
+					Manifests: []omniv1alpha1.KubernetesManifest{{
+						Name: testCiliumManifestName,
+						Mode: testManifestMode,
+						Inline: []apiextensionsv1.JSON{{
+							Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"existing"}}`),
+						}},
+					}},
+				},
+				Talos: omniv1alpha1.TalosSpec{Version: testTalosVersion},
+			},
+		},
+		ControlPlane: &omniv1alpha1.OmniControlPlane{
+			ObjectMeta: metav1.ObjectMeta{Name: "edge-control-plane"},
+			Spec: omniv1alpha1.OmniControlPlaneSpec{
+				ClusterRef: omniv1alpha1.OmniClusterRef{Name: staticClusterName},
+			},
+		},
+		Cilium: &CiliumInput{
+			ResourceName: "edge-cilium",
+			ManifestName: testCiliumManifestName,
+			Manifest: []apiextensionsv1.JSON{{
+				Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"kube-system"}}`),
+			}},
+		},
+	})
+	if err == nil {
+		t.Fatal("Render() error = nil, want duplicate manifest name error")
+	}
+	if !strings.Contains(err.Error(), `duplicate OmniCluster.spec.kubernetes.manifests[].name "cilium"`) {
+		t.Fatalf("Render() error = %v, want duplicate cilium manifest name", err)
 	}
 }
 

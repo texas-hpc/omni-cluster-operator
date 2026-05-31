@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -158,7 +159,7 @@ func Values(install *omniv1alpha1.OmniCilium) (map[string]any, bool, error) {
 	}
 	mergeMaps(values, overrides)
 
-	kubeProxyReplacement, err := boolValue(values, "kubeProxyReplacement")
+	kubeProxyReplacement, err := kubeProxyReplacementEnabled(values)
 	if err != nil {
 		return nil, false, err
 	}
@@ -292,18 +293,29 @@ func mergeMaps(dst, src map[string]any) {
 	}
 }
 
-func boolValue(values map[string]any, key string) (bool, error) {
+func kubeProxyReplacementEnabled(values map[string]any) (bool, error) {
+	const key = "kubeProxyReplacement"
+
 	value, ok := values[key]
 	if !ok {
 		return false, nil
 	}
 
-	boolValue, ok := value.(bool)
-	if !ok {
-		return false, fmt.Errorf("%s must be a boolean", key)
+	switch typed := value.(type) {
+	case bool:
+		return typed, nil
+	case string:
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "true", "enabled", "strict":
+			return true, nil
+		case "false", "disabled", "probe", "partial":
+			return false, nil
+		default:
+			return false, fmt.Errorf("%s has unsupported string value %q", key, typed)
+		}
+	default:
+		return false, fmt.Errorf("%s must be a boolean or recognized string", key)
 	}
-
-	return boolValue, nil
 }
 
 func setDefault(values map[string]any, key string, value any) {

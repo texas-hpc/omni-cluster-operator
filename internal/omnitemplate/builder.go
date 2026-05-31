@@ -196,6 +196,10 @@ func Render(in Inputs) (*Result, error) {
 	})
 
 	clusterName := ClusterName(in.Cluster)
+	if err := validateCiliumManifestName(in.Cluster, in.Cilium); err != nil {
+		return nil, err
+	}
+
 	docs := []any{renderCluster(in.Cluster, clusterName, in.Cilium), renderControlPlane(in.ControlPlane)}
 	result := &Result{
 		ClusterName:     clusterName,
@@ -296,6 +300,21 @@ func renderCluster(cluster *omniv1alpha1.OmniCluster, clusterName string, cilium
 		SystemExtensions: cluster.Spec.SystemExtensions,
 		KernelArgs:       cluster.Spec.KernelArgs,
 	}
+}
+
+func validateCiliumManifestName(cluster *omniv1alpha1.OmniCluster, cilium *CiliumInput) error {
+	if cilium == nil {
+		return nil
+	}
+
+	manifest := ciliumManifest(cilium)
+	for _, existing := range cluster.Spec.Kubernetes.Manifests {
+		if existing.Name == manifest.Name {
+			return fmt.Errorf("duplicate OmniCluster.spec.kubernetes.manifests[].name %q conflicts with OmniCilium manifest", manifest.Name)
+		}
+	}
+
+	return nil
 }
 
 func ciliumPatch(cilium *CiliumInput) omniv1alpha1.Patch {
