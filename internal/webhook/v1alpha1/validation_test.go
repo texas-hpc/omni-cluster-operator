@@ -163,6 +163,47 @@ func TestConnectionWarnings(t *testing.T) {
 	}
 }
 
+func TestOmniCiliumValidation(t *testing.T) {
+	t.Parallel()
+
+	validator := &OmniCiliumCustomValidator{}
+	install := validCilium()
+
+	_, err := validator.ValidateCreate(context.Background(), install)
+	if err != nil {
+		t.Fatalf("ValidateCreate() error = %v, want nil", err)
+	}
+
+	install.Spec.ChartVersion = " "
+	_, err = validator.ValidateCreate(context.Background(), install)
+	requireErrorContains(t, err, "chartVersion is required")
+
+	install = validCilium()
+	install.Spec.ChartRepository = "not a url"
+	_, err = validator.ValidateCreate(context.Background(), install)
+	requireErrorContains(t, err, "chartRepository must be an absolute URL")
+
+	install = validCilium()
+	install.Spec.Values = &apiextensionsv1.JSON{Raw: []byte(`[]`)}
+	_, err = validator.ValidateCreate(context.Background(), install)
+	requireErrorContains(t, err, "cilium values must be a JSON object")
+
+	install = validCilium()
+	install.Spec.Values = &apiextensionsv1.JSON{Raw: []byte(`{"kubeProxyReplacement":"strict"}`)}
+	_, err = validator.ValidateUpdate(context.Background(), validCilium(), install)
+	if err != nil {
+		t.Fatalf("ValidateUpdate() error = %v, want nil", err)
+	}
+
+	warnings, err := validator.ValidateDelete(context.Background(), install)
+	if err != nil {
+		t.Fatalf("ValidateDelete() error = %v, want nil", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("ValidateDelete() warnings = %#v, want none", warnings)
+	}
+}
+
 func validCluster() *omniv1alpha1.OmniCluster {
 	return &omniv1alpha1.OmniCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: validationClusterName},
@@ -180,6 +221,18 @@ func validCluster() *omniv1alpha1.OmniCluster {
 			Patches: []omniv1alpha1.Patch{{
 				Inline: &apiextensionsv1.JSON{Raw: []byte(`{"machine": {}}`)},
 			}},
+		},
+	}
+}
+
+func validCilium() *omniv1alpha1.OmniCilium {
+	return &omniv1alpha1.OmniCilium{
+		ObjectMeta: metav1.ObjectMeta{Name: "edge-cilium"},
+		Spec: omniv1alpha1.OmniCiliumSpec{
+			ClusterRef:      omniv1alpha1.OmniClusterRef{Name: validationClusterName},
+			ChartVersion:    "1.18.3",
+			ChartRepository: "https://helm.cilium.io/",
+			Values:          &apiextensionsv1.JSON{Raw: []byte(`{"kubeProxyReplacement": true}`)},
 		},
 	}
 }
