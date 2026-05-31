@@ -79,6 +79,7 @@ deployment.
 - [Install Cilium](https://texas-hpc.github.io/omni-cluster-operator/getting-started/install-cilium/)
 - [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
 - [Debugging](https://texas-hpc.github.io/omni-cluster-operator/guides/debugging/)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 
@@ -87,3 +88,8 @@ Version 2.0. See [LICENSE](LICENSE).
 
 Third-party dependencies, including Sidero Labs libraries used by the operator,
 remain under their own licenses.
+
+## Conduct
+
+Participation in this project is covered by the
+[Code of Conduct](CODE_OF_CONDUCT.md).
