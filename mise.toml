@@ -8,9 +8,9 @@ kubectl = "1.36.1"
 kustomize = "5.8.1"
 helm = "4.2.0"
 dotnet = "10.0.300"
-golangci-lint = "2.11.4"
-omnictl = "1.8.0"
-"go:sigs.k8s.io/controller-tools/cmd/controller-gen" = "v0.20.1"
+golangci-lint = "2.12.2"
+omnictl = "1.8.1"
+"go:sigs.k8s.io/controller-tools/cmd/controller-gen" = "v0.21.0"
 "go:sigs.k8s.io/controller-runtime/tools/setup-envtest" = "release-0.23"
 
 [env]
