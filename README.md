@@ -201,7 +201,7 @@ apiVersion: omni.texas-hpc.org/v1alpha1
 kind: OmniCilium
 metadata:
   name: edge-cilium
-  namespace: clusters
+  namespace: omni-cluster-operator-system
 spec:
   clusterRef:
     name: edge
