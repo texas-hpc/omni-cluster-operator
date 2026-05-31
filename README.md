@@ -24,7 +24,7 @@ You need:
 - Helm 3 or newer
 - cert-manager installed in the target cluster
 - access to an Omni instance
-- an Omni service account key from `omnictl serviceaccount create`
+- an Omni service account key from the Omni UI or `omnictl serviceaccount create`
 
 ### 1. Install the CRDs and Operator
 
@@ -33,22 +33,22 @@ chart registry:
 
 ```sh
 helm install omni-cluster-operator-crds \
-  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds \
-  --version <chart-version>
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds
 ```
 
 ```sh
 helm install omni-cluster-operator \
   oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
-  --version <chart-version> \
   --namespace omni-cluster-operator-system \
   --create-namespace
 ```
 
-Choose a chart version from the
+By default, Helm installs the latest chart version it can resolve from the OCI
+registry. To pin a specific release, choose a chart version from the
 [operator chart package](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator)
 and install the matching
-[CRD chart package](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator-crds).
+[CRD chart package](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator-crds)
+with `--version <chart-version>`.
 The CRD chart installs only the custom resource definitions. The operator chart
 installs the operator deployment, namespaced RBAC, services, validating webhooks,
 and cert-manager certificate resources. The manager image tag follows the chart
@@ -58,17 +58,7 @@ Inspect chart defaults before installing:
 
 ```sh
 helm show values \
-  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
-  --version <chart-version>
-```
-
-If GHCR prompts for credentials, log in with a GitHub token that can read the
-package:
-
-```sh
-echo "$GITHUB_TOKEN" | helm registry login ghcr.io \
-  --username <github-user> \
-  --password-stdin
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator
 ```
 
 For testing an unreleased branch build, override the image tag explicitly:
@@ -76,11 +66,12 @@ For testing an unreleased branch build, override the image tag explicitly:
 ```sh
 helm upgrade --install omni-cluster-operator \
   oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
-  --version <chart-version> \
   --namespace omni-cluster-operator-system \
   --create-namespace \
   --set image.tag=dev
 ```
+
+If the test image expects a specific chart release, add `--version <chart-version>`.
 
 ### 2. Add Omni Credentials
 
@@ -91,7 +82,7 @@ resources must live there too. The Secret must not be committed to Git.
 ```sh
 kubectl create secret generic omni-service-account \
   --namespace omni-cluster-operator-system \
-  --from-literal=serviceAccountKey='<output from omnictl serviceaccount create>'
+  --from-literal=serviceAccountKey='<omni service account key>'
 ```
 
 ### 3. Create Your First Cluster Template
@@ -284,11 +275,33 @@ mise run test-live-omni
 mise run tilt
 mise run omni-down
 mise run kind-down
+mise run docs-build
+mise run docs-serve
 ```
 
 `mise run test-unit` is the fast loop for API/template/controller unit tests.
 `mise run test` runs the generated manifests/code, formatting, vet, and all
 non-e2e tests.
+
+## 📚 Documentation Site
+
+User-facing documentation lives under `docs/` and is built with
+[MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
+
+Build the site locally:
+
+```sh
+mise run docs-build
+```
+
+Serve it locally:
+
+```sh
+mise run docs-serve
+```
+
+The `Docs` GitHub Actions workflow builds the site on pull requests and deploys
+the `master` branch build to GitHub Pages.
 
 ## 💻 Local Development
 
@@ -319,7 +332,7 @@ metadata:
   name: omni-service-account
 type: Opaque
 stringData:
-  serviceAccountKey: "<output from omnictl serviceaccount create>"
+  serviceAccountKey: "<omni service account key>"
 ```
 
 ## 📦 Publishing
@@ -340,14 +353,12 @@ Install a published chart version with:
 
 ```sh
 helm install omni-cluster-operator-crds \
-  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds \
-  --version <version>
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds
 ```
 
 ```sh
 helm install omni-cluster-operator \
   oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
-  --version <version> \
   --namespace omni-cluster-operator-system \
   --create-namespace
 ```

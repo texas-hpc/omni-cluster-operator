@@ -45,7 +45,7 @@ spec:
                   serviceAccountSecretRef:
                     description: |-
                       serviceAccountSecretRef points at a Secret key containing the base64 Omni service account key.
-                      Create this value with `omnictl serviceaccount create`.
+                      Create this value in the Omni UI or with `omnictl serviceaccount create`.
                     properties:
                       key:
                         default: serviceAccountKey

@@ -27,6 +27,8 @@ dist/
 
 # Local release artifacts
 dist/
+.local/docs-venv/
+site/
 
 # Local Omni credentials and fixture state
 .local/
