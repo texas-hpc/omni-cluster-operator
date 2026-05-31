@@ -122,7 +122,8 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 			g.Expect(output).To(Equal("True"))
 		}).Should(Succeed())
 
-		_, err := kubectlApply(`
+		Eventually(func(g Gomega) {
+			_, err := kubectlApply(`
 apiVersion: omni.texas-hpc.org/v1alpha1
 kind: OmniCluster
 metadata:
@@ -139,7 +140,8 @@ spec:
     orphan: true
   suspend: true
 `)
-		Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred())
+		}).Should(Succeed())
 
 		Eventually(func(g Gomega) {
 			output, err := utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-controller-ready",
