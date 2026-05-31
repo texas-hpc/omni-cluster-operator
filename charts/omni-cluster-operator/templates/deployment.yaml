@@ -58,18 +58,14 @@ spec:
               name: webhook-server
               protocol: TCP
             {{- end }}
-          {{- if or (not .Values.watchAllNamespaces) .Values.extraEnv }}
           env:
-            {{- if not .Values.watchAllNamespaces }}
-            - name: WATCH_NAMESPACE
+            - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           livenessProbe:

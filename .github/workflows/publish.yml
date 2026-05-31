@@ -23,7 +23,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    name: Publish image and chart
+    name: Publish image and charts
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
@@ -104,21 +104,25 @@ jobs:
       - name: Login to GHCR for Helm
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
 
-      - name: Package Helm chart
+      - name: Package Helm charts
         env:
           CHART_VERSION: ${{ steps.version.outputs.version }}
           APP_VERSION: ${{ steps.version.outputs.version }}
         run: mise run chart-package
 
-      - name: Push Helm chart to GHCR OCI registry
-        run: helm push "dist/charts/omni-cluster-operator-${{ steps.version.outputs.version }}.tgz" "${CHART_REGISTRY}"
+      - name: Push Helm charts to GHCR OCI registry
+        run: |
+          helm push "dist/charts/omni-cluster-operator-crds-${{ steps.version.outputs.version }}.tgz" "${CHART_REGISTRY}"
+          helm push "dist/charts/omni-cluster-operator-${{ steps.version.outputs.version }}.tgz" "${CHART_REGISTRY}"
 
       - name: Verify GHCR pulls
         env:
           IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          CRD_CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator-crds
           CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           docker buildx imagetools inspect "${IMAGE_REPOSITORY}:${VERSION}" >/dev/null
           docker buildx imagetools inspect "${IMAGE_REPOSITORY}:latest" >/dev/null
+          helm show chart "${CRD_CHART_REPOSITORY}" --version "${VERSION}" >/dev/null
           helm show chart "${CHART_REPOSITORY}" --version "${VERSION}" >/dev/null

@@ -55,3 +55,12 @@ jobs:
         run: mise run lint-config
       - name: Run linter
         run: mise run lint
+      - name: Check Helm charts
+        env:
+          CHART_VERSION: 0.0.0-ci
+          APP_VERSION: 0.0.0-ci
+          IMAGE_TAG: 0.0.0-ci
+        run: |
+          mise run chart-lint
+          mise run chart-template >/dev/null
+          mise run chart-package
