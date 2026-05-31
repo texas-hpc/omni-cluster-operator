@@ -62,7 +62,7 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 	AfterAll(func() {
 		By("deleting Omni test resources")
 		_, _ = utils.Run(exec.Command("kubectl", "delete",
-			"omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniconnections",
+			"omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniciliums,omniconnections",
 			"--all", "-n", namespace, "--ignore-not-found", "--timeout=60s"))
 
 		By("undeploying the controller-manager")
@@ -120,6 +120,37 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 				"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}", "-n", namespace))
 			g.Expect(err).NotTo(HaveOccurred(), "Failed to read controller-manager readiness")
 			g.Expect(output).To(Equal("True"))
+		}).Should(Succeed())
+
+		_, err := kubectlApply(`
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniCluster
+metadata:
+  name: e2e-controller-ready
+  namespace: omni-cluster-operator-system
+spec:
+  connectionRef:
+    name: e2e-controller-ready
+  kubernetes:
+    version: v1.35.0
+  talos:
+    version: v1.13.2
+  deletePolicy:
+    orphan: true
+  suspend: true
+`)
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func(g Gomega) {
+			output, err := utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-controller-ready",
+				"-n", namespace, "-o", "jsonpath={.metadata.finalizers[0]}"))
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(output).To(Equal("omni.texas-hpc.org/finalizer"))
+
+			output, err = utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-controller-ready",
+				"-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].reason}"))
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(output).To(Equal("Suspended"))
 		}).Should(Succeed())
 	})
 
