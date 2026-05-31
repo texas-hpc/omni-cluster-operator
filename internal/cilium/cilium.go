@@ -48,7 +48,10 @@ const (
 	RenderedManifestClusterLabel = "omni.texas-hpc.org/cluster"
 )
 
-const specHashVersion = "v1"
+const (
+	specHashVersion    = "v1"
+	netAdminCapability = "NET_ADMIN"
+)
 
 // ChartRepository returns the normalized chart repository URL.
 func ChartRepository(install *omniv1alpha1.OmniCilium) string {
@@ -236,7 +239,7 @@ func talosDefaultValues() map[string]any {
 				"ciliumAgent": []any{
 					"CHOWN",
 					"KILL",
-					"NET_ADMIN",
+					netAdminCapability,
 					"NET_RAW",
 					"IPC_LOCK",
 					"SYS_ADMIN",
@@ -247,7 +250,7 @@ func talosDefaultValues() map[string]any {
 					"SETUID",
 				},
 				"cleanCiliumState": []any{
-					"NET_ADMIN",
+					netAdminCapability,
 					"SYS_ADMIN",
 					"SYS_RESOURCE",
 				},
