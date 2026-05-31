@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Serve the MkDocs site locally."
+set -euo pipefail
+
+venv=".local/docs-venv"
+
+if [[ ! -x "${venv}/bin/mkdocs" ]]; then
+  python3 -m venv "${venv}"
+  "${venv}/bin/python" -m pip install --upgrade pip
+  "${venv}/bin/python" -m pip install -r docs/requirements.txt
+fi
+
+"${venv}/bin/mkdocs" serve --dev-addr "${MKDOCS_DEV_ADDR:-127.0.0.1:8000}"
