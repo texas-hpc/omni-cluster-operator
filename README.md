@@ -26,9 +26,16 @@ You need:
 - access to an Omni instance
 - an Omni service account key from `omnictl serviceaccount create`
 
-### 1. Install the Operator
+### 1. Install the CRDs and Operator
 
-Install the operator with Helm from the GHCR OCI chart registry:
+Install the CRDs first, then install the operator with Helm from the GHCR OCI
+chart registry:
+
+```sh
+helm install omni-cluster-operator-crds \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds \
+  --version <chart-version>
+```
 
 ```sh
 helm install omni-cluster-operator \
@@ -39,10 +46,13 @@ helm install omni-cluster-operator \
 ```
 
 Choose a chart version from the
-[GitHub Packages page](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator).
-The chart installs the operator deployment, RBAC, services, CRDs, validating
-webhooks, and cert-manager certificate resources. The manager image tag follows
-the chart app version unless you override it.
+[operator chart package](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator)
+and install the matching
+[CRD chart package](https://github.com/texas-hpc/omni-cluster-operator/pkgs/container/charts%2Fomni-cluster-operator-crds).
+The CRD chart installs only the custom resource definitions. The operator chart
+installs the operator deployment, namespaced RBAC, services, validating webhooks,
+and cert-manager certificate resources. The manager image tag follows the chart
+app version unless you override it.
 
 Inspect chart defaults before installing:
 
@@ -74,14 +84,13 @@ helm upgrade --install omni-cluster-operator \
 
 ### 2. Add Omni Credentials
 
-Create the Omni service account key in the namespace where your `OmniConnection`
-and cluster template resources will live. The Secret must not be committed to Git.
+Create the Omni service account key in the operator release namespace. The
+operator watches only its own namespace, so `OmniConnection` and cluster template
+resources must live there too. The Secret must not be committed to Git.
 
 ```sh
-kubectl create namespace clusters
-
 kubectl create secret generic omni-service-account \
-  --namespace clusters \
+  --namespace omni-cluster-operator-system \
   --from-literal=serviceAccountKey='<output from omnictl serviceaccount create>'
 ```
 
@@ -96,7 +105,7 @@ apiVersion: omni.texas-hpc.org/v1alpha1
 kind: OmniConnection
 metadata:
   name: omni
-  namespace: clusters
+  namespace: omni-cluster-operator-system
 spec:
   endpoint: https://omni.example.com
   auth:
@@ -108,7 +117,7 @@ apiVersion: omni.texas-hpc.org/v1alpha1
 kind: OmniCluster
 metadata:
   name: edge
-  namespace: clusters
+  namespace: omni-cluster-operator-system
 spec:
   connectionRef:
     name: omni
@@ -122,7 +131,7 @@ apiVersion: omni.texas-hpc.org/v1alpha1
 kind: OmniControlPlane
 metadata:
   name: edge-control-plane
-  namespace: clusters
+  namespace: omni-cluster-operator-system
 spec:
   clusterRef:
     name: edge
@@ -133,7 +142,7 @@ apiVersion: omni.texas-hpc.org/v1alpha1
 kind: OmniWorkers
 metadata:
   name: edge-workers
-  namespace: clusters
+  namespace: omni-cluster-operator-system
 spec:
   clusterRef:
     name: edge
@@ -145,9 +154,9 @@ Check reconciliation status with:
 
 ```sh
 kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines \
-  --namespace clusters
+  --namespace omni-cluster-operator-system
 
-kubectl describe omnicluster edge --namespace clusters
+kubectl describe omnicluster edge --namespace omni-cluster-operator-system
 ```
 
 ## 🧱 API Shape
@@ -287,12 +296,20 @@ via the root `version.json`. The `Publish` GitHub Actions workflow is gated to
 `master` only and publishes:
 
 - the operator image to `ghcr.io/texas-hpc/omni-cluster-operator`
-- the Helm chart as an OCI artifact at
+- the CRD Helm chart as an OCI artifact at
+  `oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds`
+- the operator Helm chart as an OCI artifact at
   `oci://ghcr.io/texas-hpc/charts/omni-cluster-operator`
 
-Both artifacts use the same NBGV `SemVer2` value, for example `0.2.0`.
+All artifacts use the same NBGV `SemVer2` value, for example `0.1.0`.
 
 Install a published chart version with:
+
+```sh
+helm install omni-cluster-operator-crds \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds \
+  --version <version>
+```
 
 ```sh
 helm install omni-cluster-operator \
@@ -301,6 +318,10 @@ helm install omni-cluster-operator \
   --namespace omni-cluster-operator-system \
   --create-namespace
 ```
+
+The operator always runs in namespaced mode: the manager watches only the release
+namespace and receives namespace-scoped RBAC for Omni custom resources and
+referenced Secrets.
 
 ## 🔄 Operator Behavior
 

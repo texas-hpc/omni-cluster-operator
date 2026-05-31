@@ -1,6 +1,6 @@
 apiVersion: v2
-name: omni-cluster-operator
-description: Kubernetes operator for managing Sidero Omni cluster lifecycles.
+name: omni-cluster-operator-crds
+description: CustomResourceDefinitions for the Omni Cluster Operator.
 type: application
 version: 0.0.0
 appVersion: 0.0.0
@@ -12,5 +12,6 @@ keywords:
   - talos
   - kubernetes
   - operator
+  - crds
 maintainers:
   - name: Texas HPC

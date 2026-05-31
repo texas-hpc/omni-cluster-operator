@@ -53,6 +53,14 @@ patches:
 - path: manager_webhook_patch.yaml
   target:
     kind: Deployment
+- path: manager_namespaced_role_patch.yaml
+  target:
+    kind: ClusterRole
+    name: manager-role
+- path: manager_namespaced_role_binding_patch.yaml
+  target:
+    kind: ClusterRoleBinding
+    name: manager-rolebinding
 
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
 # Uncomment the following replacements to add the cert-manager CA injection annotations

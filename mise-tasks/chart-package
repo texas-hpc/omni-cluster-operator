@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Package the Helm chart using the NBGV version."
+#MISE description="Package the Helm charts using the NBGV version."
 set -euo pipefail
 
 chart_version="${CHART_VERSION:-$(nbgv get-version -v SemVer2)}"
@@ -7,6 +7,10 @@ app_version="${APP_VERSION:-${chart_version}}"
 destination="${CHART_DESTINATION:-dist/charts}"
 
 mkdir -p "${destination}"
+helm package charts/omni-cluster-operator-crds \
+  --destination "${destination}" \
+  --version "${chart_version}" \
+  --app-version "${app_version}"
 helm package charts/omni-cluster-operator \
   --destination "${destination}" \
   --version "${chart_version}" \
