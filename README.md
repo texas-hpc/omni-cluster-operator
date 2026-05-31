@@ -79,3 +79,8 @@ deployment.
 - [Install Cilium](https://texas-hpc.github.io/omni-cluster-operator/getting-started/install-cilium/)
 - [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
 - [Debugging](https://texas-hpc.github.io/omni-cluster-operator/guides/debugging/)
+
+## License
+
+`omni-cluster-operator` is licensed under the Apache License, Version 2.0. See
+[LICENSE](LICENSE).
