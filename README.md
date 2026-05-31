@@ -79,6 +79,7 @@ deployment.
 - [Install Cilium](https://texas-hpc.github.io/omni-cluster-operator/getting-started/install-cilium/)
 - [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
 - [Debugging](https://texas-hpc.github.io/omni-cluster-operator/guides/debugging/)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 
