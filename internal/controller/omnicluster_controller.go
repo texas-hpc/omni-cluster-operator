@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -40,6 +41,8 @@ import (
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omnitemplate"
 )
+
+var errCiliumRenderPending = errors.New("OmniCilium render is pending")
 
 // OmniClusterReconciler reconciles a OmniCluster object
 type OmniClusterReconciler struct {
@@ -107,6 +110,10 @@ func (r *OmniClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	inputs, err := r.templateInputs(ctx, cluster)
 	if err != nil {
+		if errors.Is(err, errCiliumRenderPending) {
+			return ctrl.Result{RequeueAfter: requeueAfter}, nil
+		}
+
 		statusErr := r.markClusterFailed(ctx, cluster, omniv1alpha1.ConditionValidated, omniv1alpha1.ReasonMissingTemplate, err.Error())
 		if statusErr != nil {
 			return ctrl.Result{}, statusErr
@@ -313,10 +320,14 @@ func (r *OmniClusterReconciler) ciliumInput(ctx context.Context, cluster *omniv1
 	secret := &corev1.Secret{}
 	secretKey := client.ObjectKey{Namespace: install.Namespace, Name: cilium.RenderedManifestSecretName(&install)}
 	if err := r.Get(ctx, secretKey, secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("%w: OmniCilium %q has no rendered manifest Secret %q", errCiliumRenderPending, install.Name, secretKey.Name)
+		}
+
 		return nil, fmt.Errorf("OmniCilium %q has no rendered manifest Secret %q: %w", install.Name, secretKey.Name, err)
 	}
 	if !cilium.SecretHasCurrentManifest(secret, secret.Data, specHash) {
-		return nil, fmt.Errorf("OmniCilium %q rendered manifest Secret %q is not current", install.Name, secretKey.Name)
+		return nil, fmt.Errorf("%w: OmniCilium %q rendered manifest Secret %q is not current", errCiliumRenderPending, install.Name, secretKey.Name)
 	}
 
 	objects, err := cilium.ParseRenderedManifest(secret.Data[cilium.RenderedManifestSecretKey])

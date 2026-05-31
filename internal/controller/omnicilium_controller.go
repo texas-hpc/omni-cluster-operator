@@ -90,7 +90,7 @@ func (r *OmniCiliumReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	err = r.Get(ctx, secretKey, secret)
 	if err == nil && cilium.SecretHasCurrentManifest(secret, secret.Data, specHash) {
 		hash := cilium.RenderedManifestHash(secret.Data[cilium.RenderedManifestSecretKey])
-		return ctrl.Result{}, updateCiliumStatus(ctx, r.Client, install, true, true, hash, nil)
+		return ctrl.Result{}, updateCiliumStatus(ctx, r.Client, install, true, false, hash, nil)
 	}
 	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
