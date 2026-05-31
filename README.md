@@ -2,6 +2,12 @@
 
 Manage Sidero Omni cluster templates from Kubernetes.
 
+> [!IMPORTANT]
+> `omni-cluster-operator` is an independent community project. It is not
+> affiliated with, sponsored by, endorsed by, or maintained by Sidero Labs.
+> Sidero, Omni, Talos, and related names are trademarks or projects of their
+> respective owners.
+
 `omni-cluster-operator` gives platform teams a GitOps-friendly way to define Omni
 connections, cluster templates, machine groups, and deletion policy with normal
 Kubernetes custom resources. The controller renders those resources into an Omni

@@ -2,6 +2,9 @@
 
 `omni-cluster-operator` lets platform teams manage Sidero Omni cluster templates with normal Kubernetes custom resources.
 
+!!! warning "Independent Community Project"
+    `omni-cluster-operator` is not affiliated with, sponsored by, endorsed by, or maintained by Sidero Labs. Sidero, Omni, Talos, and related names are trademarks or projects of their respective owners.
+
 The operator runs in a Kubernetes namespace, reads an `OmniConnection`, assembles one `OmniCluster` plus its child template documents, validates the rendered Omni cluster-template YAML with Omni's public Go client, syncs it to Omni, and reports status back through Kubernetes conditions.
 
 Use it when you want:
