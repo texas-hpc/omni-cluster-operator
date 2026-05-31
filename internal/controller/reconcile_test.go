@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
@@ -40,10 +41,12 @@ import (
 )
 
 const (
-	testClusterName = "edge"
-	testNamespace   = "default"
-	testMachineName = "node-1"
-	testWorkersName = "workers"
+	testClusterName      = "edge"
+	testNamespace        = "default"
+	testMachineName      = "node-1"
+	testWorkersName      = "workers"
+	testControlPlaneName = "edge-cp"
+	testOtherClusterName = "other"
 )
 
 type fakeOmni struct {
@@ -364,6 +367,171 @@ func TestChildControllerMarksMissingCluster(t *testing.T) {
 	}
 }
 
+func TestChildControllersMarkClusterAccepted(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		object k8sObject
+		setup  func(scheme *runtime.Scheme, object k8sObject) (client.Client, reconcilerFunc)
+		assert func(t *testing.T, ctx context.Context, k8sClient clientReader)
+	}{
+		{
+			name:   "control plane",
+			object: testControlPlane(),
+			setup: func(scheme *runtime.Scheme, object k8sObject) (client.Client, reconcilerFunc) {
+				k8sClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniControlPlane{}).
+					WithObjects(testCluster(), object).
+					Build()
+				reconciler := &OmniControlPlaneReconciler{Client: k8sClient, Scheme: scheme}
+				return k8sClient, reconciler.Reconcile
+			},
+			assert: func(t *testing.T, ctx context.Context, k8sClient clientReader) {
+				t.Helper()
+				updated := &omniv1alpha1.OmniControlPlane{}
+				assertAccepted(t, ctx, k8sClient, types.NamespacedName{Namespace: testNamespace, Name: testControlPlaneName}, updated)
+			},
+		},
+		{
+			name:   "workers",
+			object: testWorkers(),
+			setup: func(scheme *runtime.Scheme, object k8sObject) (client.Client, reconcilerFunc) {
+				k8sClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniWorkers{}).
+					WithObjects(testCluster(), object).
+					Build()
+				reconciler := &OmniWorkersReconciler{Client: k8sClient, Scheme: scheme}
+				return k8sClient, reconciler.Reconcile
+			},
+			assert: func(t *testing.T, ctx context.Context, k8sClient clientReader) {
+				t.Helper()
+				updated := &omniv1alpha1.OmniWorkers{}
+				assertAccepted(t, ctx, k8sClient, types.NamespacedName{Namespace: testNamespace, Name: testWorkersName}, updated)
+			},
+		},
+		{
+			name: "machine",
+			object: &omniv1alpha1.OmniMachine{
+				ObjectMeta: metav1.ObjectMeta{Name: testMachineName, Namespace: testNamespace},
+				Spec: omniv1alpha1.OmniMachineSpec{
+					ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
+				},
+			},
+			setup: func(scheme *runtime.Scheme, object k8sObject) (client.Client, reconcilerFunc) {
+				k8sClient := fake.NewClientBuilder().
+					WithScheme(scheme).
+					WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniMachine{}).
+					WithObjects(testCluster(), object).
+					Build()
+				reconciler := &OmniMachineReconciler{Client: k8sClient, Scheme: scheme}
+				return k8sClient, reconciler.Reconcile
+			},
+			assert: func(t *testing.T, ctx context.Context, k8sClient clientReader) {
+				t.Helper()
+				updated := &omniv1alpha1.OmniMachine{}
+				assertAccepted(t, ctx, k8sClient, types.NamespacedName{Namespace: testNamespace, Name: testMachineName}, updated)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			k8sClient, reconcile := tt.setup(scheme, tt.object)
+
+			key := types.NamespacedName{Namespace: tt.object.GetNamespace(), Name: tt.object.GetName()}
+			if _, err := reconcile(ctx, ctrl.Request{NamespacedName: key}); err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+
+			tt.assert(t, ctx, k8sClient)
+		})
+	}
+}
+
+func TestOmniConnectionReconcilesReachability(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		pingErr      error
+		wantStatus   metav1.ConditionStatus
+		wantReason   string
+		wantRequeue  bool
+		wantError    bool
+		wantContains string
+	}{
+		{
+			name:         "success",
+			wantStatus:   metav1.ConditionTrue,
+			wantReason:   omniv1alpha1.ReasonConnectionReady,
+			wantRequeue:  true,
+			wantContains: "connected to https://omni.example.test",
+		},
+		{
+			name:         "failure",
+			pingErr:      fmt.Errorf("unauthorized"),
+			wantStatus:   metav1.ConditionFalse,
+			wantReason:   omniv1alpha1.ReasonConnectionFailed,
+			wantRequeue:  true,
+			wantError:    true,
+			wantContains: "failed to connect to Omni: unauthorized",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			connection := testConnection()
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
+				WithObjects(connection).
+				Build()
+
+			reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: &fakeOmni{pingErr: tt.pingErr}}
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}})
+			if tt.wantError && err == nil {
+				t.Fatal("Reconcile() error = nil, want error")
+			}
+			if !tt.wantError && err != nil {
+				t.Fatalf("Reconcile() error = %v, want nil", err)
+			}
+			if tt.wantRequeue && result.RequeueAfter == 0 {
+				t.Fatal("RequeueAfter = 0, want periodic connection check")
+			}
+
+			updated := &omniv1alpha1.OmniConnection{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: connection.Name}, updated); err != nil {
+				t.Fatalf("get connection: %v", err)
+			}
+			if updated.Status.LastCheckTime == nil {
+				t.Fatal("LastCheckTime is nil")
+			}
+			if updated.Status.Endpoint != connection.Spec.Endpoint {
+				t.Fatalf("Endpoint = %q, want %q", updated.Status.Endpoint, connection.Spec.Endpoint)
+			}
+			ready := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady)
+			if ready == nil || ready.Status != tt.wantStatus || ready.Reason != tt.wantReason || !strings.Contains(ready.Message, tt.wantContains) {
+				t.Fatalf("Ready condition = %#v, want status %s reason %s containing %q", ready, tt.wantStatus, tt.wantReason, tt.wantContains)
+			}
+			reachable := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReachable)
+			if reachable == nil || reachable.Status != tt.wantStatus || reachable.Reason != tt.wantReason {
+				t.Fatalf("Reachable condition = %#v, want status %s reason %s", reachable, tt.wantStatus, tt.wantReason)
+			}
+		})
+	}
+}
+
 func TestOmniCiliumCachesRenderedManifest(t *testing.T) {
 	t.Parallel()
 
@@ -528,8 +696,9 @@ func TestChildRequestsForCluster(t *testing.T) {
 	scheme := testScheme(t)
 	otherControlPlane := testControlPlane()
 	otherControlPlane.Name = "other-cp"
-	otherControlPlane.Spec.ClusterRef.Name = "other"
+	otherControlPlane.Spec.ClusterRef.Name = testOtherClusterName
 	workers := testWorkers()
+	install := testCilium()
 	machine := &omniv1alpha1.OmniMachine{
 		ObjectMeta: metav1.ObjectMeta{Name: testMachineName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniMachineSpec{
@@ -539,11 +708,11 @@ func TestChildRequestsForCluster(t *testing.T) {
 	cluster := testCluster()
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(testControlPlane(), otherControlPlane, workers, machine).
+		WithObjects(testControlPlane(), otherControlPlane, workers, machine, install).
 		Build()
 
 	controlPlaneRequests := controlPlaneRequestsForCluster(ctx, k8sClient, cluster)
-	if len(controlPlaneRequests) != 1 || controlPlaneRequests[0].Name != "edge-cp" {
+	if len(controlPlaneRequests) != 1 || controlPlaneRequests[0].Name != testControlPlaneName {
 		t.Fatalf("controlPlaneRequests = %#v, want [edge-cp]", controlPlaneRequests)
 	}
 
@@ -558,8 +727,118 @@ func TestChildRequestsForCluster(t *testing.T) {
 	}
 
 	ciliumRequests := ciliumRequestsForCluster(ctx, k8sClient, cluster)
-	if len(ciliumRequests) != 0 {
-		t.Fatalf("ciliumRequests = %#v, want []", ciliumRequests)
+	if len(ciliumRequests) != 1 || ciliumRequests[0].Name != install.Name {
+		t.Fatalf("ciliumRequests = %#v, want [%s]", ciliumRequests, install.Name)
+	}
+}
+
+func TestClusterWatchRequestMapping(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(
+			testCluster(),
+			&omniv1alpha1.OmniCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: testOtherClusterName, Namespace: testNamespace},
+				Spec: omniv1alpha1.OmniClusterSpec{
+					ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "other-omni"},
+				},
+			},
+		).
+		Build()
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme}
+
+	for _, child := range []client.Object{testControlPlane(), testWorkers(), testCilium()} {
+		requests := requestForChildCluster(ctx, child)
+		if len(requests) != 1 || requests[0].Name != testClusterName {
+			t.Fatalf("requestForChildCluster(%T) = %#v, want cluster %q", child, requests, testClusterName)
+		}
+	}
+	if requests := requestForChildCluster(ctx, testConnection()); len(requests) != 0 {
+		t.Fatalf("requestForChildCluster(connection) = %#v, want none", requests)
+	}
+	if requests := requestForClusterRef(testNamespace, ""); len(requests) != 0 {
+		t.Fatalf("requestForClusterRef(empty) = %#v, want none", requests)
+	}
+
+	requests := reconciler.clustersForConnection(ctx, testConnection())
+	if len(requests) != 1 || requests[0].Name != testClusterName {
+		t.Fatalf("clustersForConnection() = %#v, want cluster %q", requests, testClusterName)
+	}
+}
+
+func TestClusterRequestsForCiliumSecret(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	install := testCilium()
+	other := testCilium()
+	other.Name = "other-cilium"
+	other.Spec.ClusterRef.Name = testOtherClusterName
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cilium.RenderedManifestSecretName(install),
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				cilium.RenderedManifestOwnerLabel: install.Name,
+			},
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(install, other).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme}
+	requests := reconciler.clustersForCiliumSecret(ctx, secret)
+	if len(requests) != 1 || requests[0].Name != testClusterName {
+		t.Fatalf("clustersForCiliumSecret() = %#v, want cluster %q", requests, testClusterName)
+	}
+
+	unlabeled := secret.DeepCopy()
+	unlabeled.Labels = nil
+	if requests := reconciler.clustersForCiliumSecret(ctx, unlabeled); len(requests) != 0 {
+		t.Fatalf("clustersForCiliumSecret(unlabeled) = %#v, want none", requests)
+	}
+}
+
+type k8sObject interface {
+	client.Object
+}
+
+type clientReader interface {
+	Get(context.Context, client.ObjectKey, client.Object, ...client.GetOption) error
+}
+
+type reconcilerFunc func(context.Context, ctrl.Request) (ctrl.Result, error)
+
+func assertAccepted(t *testing.T, ctx context.Context, k8sClient clientReader, key types.NamespacedName, object interface {
+	client.Object
+}) {
+	t.Helper()
+
+	if err := k8sClient.Get(ctx, key, object); err != nil {
+		t.Fatalf("get %s: %v", key, err)
+	}
+
+	var conditions []metav1.Condition
+	switch typed := object.(type) {
+	case *omniv1alpha1.OmniControlPlane:
+		conditions = typed.Status.Conditions
+	case *omniv1alpha1.OmniWorkers:
+		conditions = typed.Status.Conditions
+	case *omniv1alpha1.OmniMachine:
+		conditions = typed.Status.Conditions
+	default:
+		t.Fatalf("unsupported object type %T", object)
+	}
+
+	if got := meta.FindStatusCondition(conditions, omniv1alpha1.ConditionAccepted); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Accepted condition = %#v, want True", got)
 	}
 }
 
@@ -605,7 +884,7 @@ func testCluster() *omniv1alpha1.OmniCluster {
 
 func testControlPlane() *omniv1alpha1.OmniControlPlane {
 	return &omniv1alpha1.OmniControlPlane{
-		ObjectMeta: metav1.ObjectMeta{Name: "edge-cp", Namespace: testNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: testControlPlaneName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniControlPlaneSpec{
 			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
 			MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
