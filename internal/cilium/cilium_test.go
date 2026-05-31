@@ -14,8 +14,6 @@ import (
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 )
 
-const netAdminCapability = "NET_ADMIN"
-
 func TestNormalizedSpecDefaultsAndOverrides(t *testing.T) {
 	t.Parallel()
 
