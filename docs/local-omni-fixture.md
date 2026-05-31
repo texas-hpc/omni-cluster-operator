@@ -1,4 +1,6 @@
-# Local Omni Fixture
+# Developer Local Omni Fixture
+
+This page is for contributors who need a local real-Omni smoke test while developing the operator.
 
 The operator has deterministic no-Omni tests today:
 

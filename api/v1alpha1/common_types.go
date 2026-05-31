@@ -85,7 +85,7 @@ type SecretKeySelector struct {
 // OmniAuthSpec configures non-interactive Omni authentication.
 type OmniAuthSpec struct {
 	// serviceAccountSecretRef points at a Secret key containing the base64 Omni service account key.
-	// Create this value with `omnictl serviceaccount create`.
+	// Create this value in the Omni UI or with `omnictl serviceaccount create`.
 	// +required
 	ServiceAccountSecretRef SecretKeySelector `json:"serviceAccountSecretRef"`
 }
