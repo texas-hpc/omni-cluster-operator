@@ -1,4 +1,6 @@
 The Omni Cluster Operator has been installed into namespace {{ .Release.Namespace }}.
 
+The manager is configured to watch only namespace {{ .Release.Namespace }}.
+
 Published image:
   {{ include "omni-cluster-operator.image" . }}

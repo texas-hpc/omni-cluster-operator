@@ -42,8 +42,9 @@ import (
 // OmniClusterReconciler reconciles a OmniCluster object
 type OmniClusterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Omni   omniapi.Client
+	Scheme       *runtime.Scheme
+	SecretReader client.Reader
+	Omni         omniapi.Client
 }
 
 // +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniclusters,verbs=get;list;watch;create;update;patch;delete
@@ -280,7 +281,12 @@ func (r *OmniClusterReconciler) omniClient() omniapi.Client {
 		return r.Omni
 	}
 
-	return &omniapi.RealClient{K8sClient: r.Client}
+	secretReader := r.SecretReader
+	if secretReader == nil {
+		secretReader = r.Client
+	}
+
+	return &omniapi.RealClient{K8sClient: secretReader}
 }
 
 func (r *OmniClusterReconciler) markClusterFailed(ctx context.Context, cluster *omniv1alpha1.OmniCluster, conditionType, reason, message string) error {
