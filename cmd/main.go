@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 
@@ -48,6 +49,8 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const serviceAccountNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
@@ -64,7 +67,6 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var watchNamespace string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -83,8 +85,6 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&watchNamespace, "watch-namespace", os.Getenv("WATCH_NAMESPACE"),
-		"Namespace that the manager watches. Defaults to WATCH_NAMESPACE. Leave empty to watch all namespaces.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -180,14 +180,15 @@ func main() {
 		// LeaderElectionReleaseOnCancel: true,
 	}
 
-	watchNamespace = strings.TrimSpace(watchNamespace)
-	if watchNamespace != "" {
-		setupLog.Info("Restricting manager cache to namespace", "namespace", watchNamespace)
-		managerOptions.Cache.DefaultNamespaces = map[string]cache.Config{
-			watchNamespace: {},
-		}
-	} else {
-		setupLog.Info("Watching all namespaces")
+	watchNamespace, err := managerNamespace()
+	if err != nil {
+		setupLog.Error(err, "Failed to determine manager namespace")
+		os.Exit(1)
+	}
+
+	setupLog.Info("Restricting manager cache to namespace", "namespace", watchNamespace)
+	managerOptions.Cache.DefaultNamespaces = map[string]cache.Config{
+		watchNamespace: {},
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), managerOptions)
@@ -268,4 +269,19 @@ func main() {
 		setupLog.Error(err, "Failed to run manager")
 		os.Exit(1)
 	}
+}
+
+func managerNamespace() (string, error) {
+	if namespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE")); namespace != "" {
+		return namespace, nil
+	}
+
+	contents, err := os.ReadFile(serviceAccountNamespacePath)
+	if err == nil {
+		if namespace := strings.TrimSpace(string(contents)); namespace != "" {
+			return namespace, nil
+		}
+	}
+
+	return "", fmt.Errorf("POD_NAMESPACE is required when %s is unavailable", serviceAccountNamespacePath)
 }

@@ -13,11 +13,6 @@ imagePullSecrets: []
 
 replicaCount: 1
 
-# By default, the manager watches only the Helm release namespace and receives
-# namespace-scoped RBAC. Set this to true for one operator instance to reconcile
-# Omni resources across every namespace.
-watchAllNamespaces: false
-
 leaderElection:
   enabled: true
 
