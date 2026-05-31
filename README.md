@@ -82,5 +82,8 @@ deployment.
 
 ## License
 
-`omni-cluster-operator` is licensed under the Apache License, Version 2.0. See
-[LICENSE](LICENSE).
+The source code in this repository is licensed under the Apache License,
+Version 2.0. See [LICENSE](LICENSE).
+
+Third-party dependencies, including Sidero Labs libraries used by the operator,
+remain under their own licenses.
