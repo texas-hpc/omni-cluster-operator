@@ -68,7 +68,7 @@ kubectl create secret generic omni-service-account \
 `OmniConnection` tells the operator how to reach Omni and which Secret key contains the service account key.
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniConnection
 metadata:
   name: omni
@@ -88,7 +88,7 @@ Skip this section if the machine set definitions are enough for your cluster. Us
 `OmniMachine.spec.clusterRef.name` can point at the cluster name you are about to create. The resource may report `MissingCluster` until the matching `OmniCluster` exists.
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniMachine
 metadata:
   name: cluster-01-control-plane-0
@@ -106,7 +106,7 @@ spec:
 Each cluster should have exactly one `OmniControlPlane`. It can select explicit machine IDs or a machine class.
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniControlPlane
 metadata:
   name: cluster-01-control-plane
@@ -123,7 +123,7 @@ spec:
 `OmniWorkers` defines one worker set. Add more `OmniWorkers` resources when a cluster needs multiple worker sets.
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: cluster-01-workers
@@ -146,7 +146,7 @@ Skip this section when you want to assign explicit machine IDs. `OmniControlPlan
 This control plane uses a machine class instead of explicit machine IDs:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniControlPlane
 metadata:
   name: cluster-01-control-plane
@@ -162,7 +162,7 @@ spec:
 This worker set also uses a machine class:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: cluster-01-gpu-workers
@@ -181,7 +181,7 @@ spec:
 `OmniCluster` ties the template together. It owns the remote Omni cluster lifecycle, selects the shared connection, gathers child template resources by `clusterRef`, and defines cluster-level versions and settings.
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCluster
 metadata:
   name: cluster-01
@@ -199,7 +199,7 @@ spec:
 If the cluster has no `OmniWorkers`, the control plane nodes need to run normal workloads too. Talos does not schedule workloads on control plane nodes by default, so add a cluster-level patch that sets `cluster.allowSchedulingOnControlPlanes: true`:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCluster
 metadata:
   name: cluster-01
@@ -298,7 +298,7 @@ Common updates include:
 Example version update:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCluster
 metadata:
   name: cluster-01
@@ -316,7 +316,7 @@ spec:
 Example worker scale-out with a machine class:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: cluster-01-gpu-workers

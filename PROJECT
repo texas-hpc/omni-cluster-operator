@@ -3,7 +3,7 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.14.0
-domain: texas-hpc.org
+domain: texashpc.com
 layout:
 - go.kubebuilder.io/v4
 projectName: omni-cluster-operator
@@ -13,7 +13,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: texas-hpc.org
+  domain: texashpc.com
   group: omni
   kind: OmniCilium
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
@@ -25,7 +25,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: texas-hpc.org
+  domain: texashpc.com
   group: omni
   kind: OmniCluster
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
@@ -37,7 +37,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: texas-hpc.org
+  domain: texashpc.com
   group: omni
   kind: OmniConnection
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
@@ -49,7 +49,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: texas-hpc.org
+  domain: texashpc.com
   group: omni
   kind: OmniControlPlane
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
@@ -61,7 +61,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: texas-hpc.org
+  domain: texashpc.com
   group: omni
   kind: OmniMachine
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
@@ -73,7 +73,7 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: texas-hpc.org
+  domain: texashpc.com
   group: omni
   kind: OmniWorkers
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1

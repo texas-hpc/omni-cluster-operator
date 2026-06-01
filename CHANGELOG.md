@@ -21,3 +21,7 @@ entries under the released version heading.
 ### Removed
 
 ### Breaking Changes
+
+- Renamed the Kubernetes API group from `omni.texas-hpc.org/v1alpha1` to
+  `omni.texashpc.com/v1alpha1`. Existing GitOps manifests and installed CRDs
+  must be migrated to the new API group.

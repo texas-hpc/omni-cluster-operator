@@ -32,7 +32,7 @@ func SetupOmniCiliumWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/validate-omni-texas-hpc-org-v1alpha1-omnicilium,mutating=false,failurePolicy=fail,sideEffects=None,groups=omni.texas-hpc.org,resources=omniciliums,verbs=create;update,versions=v1alpha1,name=vomnicilium-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-omni-texashpc-com-v1alpha1-omnicilium,mutating=false,failurePolicy=fail,sideEffects=None,groups=omni.texashpc.com,resources=omniciliums,verbs=create;update,versions=v1alpha1,name=vomnicilium-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // OmniCiliumCustomValidator struct is responsible for validating the OmniCilium resource
 // when it is created, updated, or deleted.

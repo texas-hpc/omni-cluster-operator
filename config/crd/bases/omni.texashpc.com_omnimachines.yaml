@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: omnicontrolplanes.omni.texas-hpc.org
+  name: omnimachines.omni.texashpc.com
 spec:
-  group: omni.texas-hpc.org
+  group: omni.texashpc.com
   names:
-    kind: OmniControlPlane
-    listKind: OmniControlPlaneList
-    plural: omnicontrolplanes
-    singular: omnicontrolplane
+    kind: OmniMachine
+    listKind: OmniMachineList
+    plural: omnimachines
+    singular: omnimachine
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OmniControlPlane is the Schema for the omnicontrolplanes API
+        description: OmniMachine is the Schema for the omnimachines API
         properties:
           apiVersion:
             description: |-
@@ -37,32 +37,16 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of OmniControlPlane
+            description: spec defines the desired state of OmniMachine
             properties:
               annotations:
                 additionalProperties:
                   type: string
                 description: annotations are applied to the generated Omni resource.
                 type: object
-              bootstrapSpec:
-                description: bootstrapSpec configures restore bootstrap behavior.
-                properties:
-                  clusterUUID:
-                    description: clusterUUID is the UUID of the cluster to restore
-                      from.
-                    minLength: 1
-                    type: string
-                  snapshot:
-                    description: snapshot is the snapshot file name to restore from.
-                    minLength: 1
-                    type: string
-                required:
-                - clusterUUID
-                - snapshot
-                type: object
               clusterRef:
-                description: clusterRef attaches this control plane document to one
-                  OmniCluster in the same namespace.
+                description: clusterRef attaches this machine document to one OmniCluster
+                  in the same namespace.
                 properties:
                   name:
                     description: name is the referenced object name.
@@ -71,8 +55,19 @@ spec:
                 required:
                 - name
                 type: object
+              install:
+                description: install configures Talos installation for this static
+                  machine.
+                properties:
+                  disk:
+                    description: disk is the install disk path.
+                    minLength: 1
+                    type: string
+                required:
+                - disk
+                type: object
               kernelArgs:
-                description: kernelArgs are managed for static machines in this set.
+                description: kernelArgs are managed for this static machine.
                 items:
                   type: string
                 type: array
@@ -81,34 +76,17 @@ spec:
                   type: string
                 description: labels are applied to the generated Omni resource.
                 type: object
-              machineClass:
-                description: machineClass selects machines from an Omni MachineClass.
-                  Mutually exclusive with machines.
-                properties:
-                  name:
-                    description: name is the Omni MachineClass name.
-                    minLength: 1
-                    type: string
-                  size:
-                    anyOf:
-                    - type: integer
-                    - type: string
-                    description: size is a number of machines, or one of Omni's string
-                      size keywords such as unlimited.
-                    x-kubernetes-int-or-string: true
-                required:
-                - name
-                - size
-                type: object
-              machines:
-                description: machines is the explicit list of Omni machine IDs in
-                  this set. Mutually exclusive with machineClass.
-                items:
-                  type: string
-                minItems: 1
-                type: array
+              locked:
+                description: |-
+                  locked prevents config updates, upgrades, and downgrades for this machine.
+                  Omni allows locked machines only when used as workers.
+                type: boolean
+              machineID:
+                description: machineID is the Omni machine ID. Defaults to metadata.name
+                  when omitted.
+                type: string
               patches:
-                description: patches are applied to the generated machine set.
+                description: patches are applied to this machine.
                 items:
                   description: Patch is a Talos machine configuration patch reference
                     used by Omni cluster templates.
@@ -143,19 +121,15 @@ spec:
                   type: object
                 type: array
               systemExtensions:
-                description: systemExtensions are installed on every machine in this
-                  set.
+                description: systemExtensions are installed on this machine.
                 items:
                   type: string
                 type: array
             required:
             - clusterRef
             type: object
-            x-kubernetes-validations:
-            - message: exactly one of machines or machineClass is required
-              rule: has(self.machines) != has(self.machineClass)
           status:
-            description: status defines the observed state of OmniControlPlane
+            description: status defines the observed state of OmniMachine
             properties:
               clusterRef:
                 description: clusterRef is the last cluster reference observed by
@@ -221,6 +195,9 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              machineID:
+                description: machineID is the Omni machine ID rendered by the controller.
+                type: string
               observedGeneration:
                 description: observedGeneration is the latest generation handled by
                   the controller.

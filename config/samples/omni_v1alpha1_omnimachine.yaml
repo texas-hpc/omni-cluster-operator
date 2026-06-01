@@ -1,4 +1,4 @@
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniMachine
 metadata:
   labels:
@@ -12,7 +12,7 @@ spec:
   install:
     disk: /dev/nvme0n1
 ---
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniMachine
 metadata:
   labels:

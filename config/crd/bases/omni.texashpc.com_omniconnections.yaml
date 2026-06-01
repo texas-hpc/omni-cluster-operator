@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: omniciliums.omni.texas-hpc.org
+  name: omniconnections.omni.texashpc.com
 spec:
-  group: omni.texas-hpc.org
+  group: omni.texashpc.com
   names:
-    kind: OmniCilium
-    listKind: OmniCiliumList
-    plural: omniciliums
-    singular: omnicilium
+    kind: OmniConnection
+    listKind: OmniConnectionList
+    plural: omniconnections
+    singular: omniconnection
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OmniCilium is the Schema for the omniciliums API
+        description: OmniConnection is the Schema for the omniconnections API
         properties:
           apiVersion:
             description: |-
@@ -37,72 +37,47 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of OmniCilium
+            description: spec defines the desired state of OmniConnection
             properties:
-              chartRepository:
-                default: https://helm.cilium.io/
-                description: chartRepository is the Helm repository URL that serves
-                  the Cilium chart.
-                type: string
-              chartVersion:
-                description: chartVersion is the Cilium Helm chart version to render.
-                minLength: 1
-                type: string
-              clusterRef:
-                description: clusterRef attaches this Cilium installation to one OmniCluster
-                  in the same namespace.
+              auth:
+                description: auth configures non-interactive authentication to Omni.
                 properties:
-                  name:
-                    description: name is the referenced object name.
-                    minLength: 1
-                    type: string
+                  serviceAccountSecretRef:
+                    description: |-
+                      serviceAccountSecretRef points at a Secret key containing the base64 Omni service account key.
+                      Create this value in the Omni UI or with `omnictl serviceaccount create`.
+                    properties:
+                      key:
+                        default: serviceAccountKey
+                        description: key is the Secret data key.
+                        type: string
+                      name:
+                        description: name is the Secret name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
                 required:
-                - name
+                - serviceAccountSecretRef
                 type: object
-              manifestName:
-                default: cilium
-                description: manifestName is the Omni manifest sync entry name.
-                minLength: 1
+              endpoint:
+                description: endpoint is the Omni API URL. Use https for managed and
+                  normal self-hosted Omni.
+                pattern: ^(https?|grpc)://.+
                 type: string
-              mode:
-                default: full
-                description: mode controls how Omni applies the rendered Cilium manifest.
-                enum:
-                - one-time
-                - full
-                type: string
-              namespace:
-                default: kube-system
-                description: namespace is the Kubernetes namespace for the rendered
-                  Cilium objects.
-                minLength: 1
-                type: string
-              releaseName:
-                default: cilium
-                description: releaseName is the Helm release name used while rendering
-                  Cilium.
-                minLength: 1
-                type: string
-              values:
-                description: |-
-                  values is merged over the operator's Talos-compatible Cilium defaults before rendering.
-                  Set kubeProxyReplacement: true here to also disable kube-proxy in the generated Talos patch.
-                x-kubernetes-preserve-unknown-fields: true
+              insecureSkipTLSVerify:
+                description: insecureSkipTLSVerify disables TLS certificate verification.
+                  Use only for local development.
+                type: boolean
             required:
-            - chartVersion
-            - clusterRef
+            - auth
+            - endpoint
             type: object
           status:
-            description: status defines the observed state of OmniCilium
+            description: status defines the observed state of OmniConnection
             properties:
-              chartVersion:
-                description: chartVersion is the last Cilium chart version rendered
-                  by the controller.
-                type: string
-              clusterRef:
-                description: clusterRef is the last cluster reference observed by
-                  the controller.
-                type: string
               conditions:
                 description: conditions represent the current state of the resource.
                 items:
@@ -163,32 +138,22 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
-              kubeProxyReplacement:
-                description: kubeProxyReplacement records whether the rendered values
-                  request Cilium kube-proxy replacement.
-                type: boolean
-              lastRenderTime:
-                description: lastRenderTime is when the controller last rendered or
-                  reused the cached manifest.
-                format: date-time
-                type: string
-              manifestName:
-                description: manifestName is the Omni manifest sync name rendered
+              connectionRef:
+                description: connectionRef is the last OmniConnection name observed
                   by the controller.
+                type: string
+              endpoint:
+                description: endpoint is the last Omni endpoint observed by the controller.
+                type: string
+              lastCheckTime:
+                description: lastCheckTime is when connectivity was last checked.
+                format: date-time
                 type: string
               observedGeneration:
                 description: observedGeneration is the latest generation handled by
                   the controller.
                 format: int64
                 type: integer
-              renderedManifestHash:
-                description: renderedManifestHash is the SHA-256 hash of the cached
-                  rendered manifest.
-                type: string
-              renderedManifestSecretRef:
-                description: renderedManifestSecretRef names the Secret containing
-                  the cached rendered manifest.
-                type: string
             type: object
         required:
         - spec

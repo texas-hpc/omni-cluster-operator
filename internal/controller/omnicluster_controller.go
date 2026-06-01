@@ -52,14 +52,14 @@ type OmniClusterReconciler struct {
 	Omni         omniapi.Client
 }
 
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniclusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniclusters/finalizers,verbs=update
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniconnections,verbs=get;list;watch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omnicontrolplanes,verbs=get;list;watch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniworkers,verbs=get;list;watch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omnimachines,verbs=get;list;watch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniciliums,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters/finalizers,verbs=update
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniconnections,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnicontrolplanes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniworkers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnimachines,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniciliums,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *OmniClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

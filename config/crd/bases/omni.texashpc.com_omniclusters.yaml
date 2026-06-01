@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: omniclusters.omni.texas-hpc.org
+  name: omniclusters.omni.texashpc.com
 spec:
-  group: omni.texas-hpc.org
+  group: omni.texashpc.com
   names:
     kind: OmniCluster
     listKind: OmniClusterList

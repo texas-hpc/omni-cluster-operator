@@ -29,7 +29,7 @@ helm install omni-cluster-operator-crds \
 
 ## Installed APIs
 
-The chart installs CRDs in the `omni.texas-hpc.org` API group:
+The chart installs CRDs in the `omni.texashpc.com` API group:
 
 | Kind | Purpose |
 | --- | --- |

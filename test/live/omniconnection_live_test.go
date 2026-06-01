@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	omniAPIGroup      = "omni.texas-hpc.org/v1alpha1"
-	omniConnectionGVR = "omniconnections.omni.texas-hpc.org"
+	omniAPIGroup      = "omni.texashpc.com/v1alpha1"
+	omniConnectionGVR = "omniconnections.omni.texashpc.com"
 )
 
 func TestLiveOmniConnection(t *testing.T) {

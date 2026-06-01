@@ -16,12 +16,12 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
-        path: /validate-omni-texas-hpc-org-v1alpha1-omnicilium
+        path: /validate-omni-texashpc-com-v1alpha1-omnicilium
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomnicilium-v1alpha1.kb.io
     rules:
       - apiGroups:
-          - omni.texas-hpc.org
+          - omni.texashpc.com
         apiVersions:
           - v1alpha1
         operations:
@@ -36,12 +36,12 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
-        path: /validate-omni-texas-hpc-org-v1alpha1-omnicluster
+        path: /validate-omni-texashpc-com-v1alpha1-omnicluster
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomnicluster-v1alpha1.kb.io
     rules:
       - apiGroups:
-          - omni.texas-hpc.org
+          - omni.texashpc.com
         apiVersions:
           - v1alpha1
         operations:
@@ -56,12 +56,12 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
-        path: /validate-omni-texas-hpc-org-v1alpha1-omniconnection
+        path: /validate-omni-texashpc-com-v1alpha1-omniconnection
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomniconnection-v1alpha1.kb.io
     rules:
       - apiGroups:
-          - omni.texas-hpc.org
+          - omni.texashpc.com
         apiVersions:
           - v1alpha1
         operations:
@@ -76,12 +76,12 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
-        path: /validate-omni-texas-hpc-org-v1alpha1-omnicontrolplane
+        path: /validate-omni-texashpc-com-v1alpha1-omnicontrolplane
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomnicontrolplane-v1alpha1.kb.io
     rules:
       - apiGroups:
-          - omni.texas-hpc.org
+          - omni.texashpc.com
         apiVersions:
           - v1alpha1
         operations:
@@ -96,12 +96,12 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
-        path: /validate-omni-texas-hpc-org-v1alpha1-omnimachine
+        path: /validate-omni-texashpc-com-v1alpha1-omnimachine
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomnimachine-v1alpha1.kb.io
     rules:
       - apiGroups:
-          - omni.texas-hpc.org
+          - omni.texashpc.com
         apiVersions:
           - v1alpha1
         operations:
@@ -116,12 +116,12 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
-        path: /validate-omni-texas-hpc-org-v1alpha1-omniworkers
+        path: /validate-omni-texashpc-com-v1alpha1-omniworkers
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomniworkers-v1alpha1.kb.io
     rules:
       - apiGroups:
-          - omni.texas-hpc.org
+          - omni.texashpc.com
         apiVersions:
           - v1alpha1
         operations:

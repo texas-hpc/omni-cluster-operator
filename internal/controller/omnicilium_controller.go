@@ -48,10 +48,10 @@ type OmniCiliumReconciler struct {
 	Renderer CiliumRenderer
 }
 
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniciliums,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniciliums/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniciliums/finalizers,verbs=update
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniciliums,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniciliums/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniciliums/finalizers,verbs=update
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *OmniCiliumReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

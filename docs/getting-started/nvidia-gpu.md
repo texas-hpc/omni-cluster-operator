@@ -43,7 +43,7 @@ Pick one suffix per GPU node and use it consistently for the driver, container t
 Talos also needs the NVIDIA kernel modules loaded on GPU nodes. Include the module patch in the same worker set so extension changes and machine config changes roll together:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: cluster-01-gpu-workers
@@ -111,7 +111,7 @@ Keep the split explicit:
 Minimal x86 OSS worker set shape:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: cluster-01-gpu-x86-oss
@@ -133,7 +133,7 @@ spec:
 Minimal arm64 GB10 proprietary worker set shape:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: cluster-01-gpu-arm64-proprietary
