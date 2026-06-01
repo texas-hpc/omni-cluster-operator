@@ -4,6 +4,30 @@ on:
   push:
     branches:
       - master
+    paths:
+      - .dockerignore
+      - Dockerfile
+      - api/**
+      - charts/**
+      - cmd/**
+      - config/**
+      - go.mod
+      - go.sum
+      - internal/**
+      - mise-tasks/build
+      - mise-tasks/build-installer
+      - mise-tasks/chart-package
+      - mise-tasks/chart-sync-crds
+      - mise-tasks/chart-template
+      - mise-tasks/docker-build
+      - mise-tasks/docker-buildx
+      - mise-tasks/docker-push
+      - mise-tasks/generate
+      - mise-tasks/manifests
+      - mise-tasks/render-default
+      - mise-tasks/samples
+      - mise.toml
+      - version.json
   workflow_dispatch:
 
 permissions: {}
@@ -21,7 +45,7 @@ jobs:
   publish:
     if: github.ref == 'refs/heads/master'
     permissions:
-      contents: read
+      contents: write
       packages: write
     name: Publish image and charts
     runs-on: ubuntu-latest
@@ -63,9 +87,11 @@ jobs:
           version="$(nbgv get-version -v SemVer2)"
           app_version="$(nbgv get-version -v AssemblyInformationalVersion)"
           short_sha="$(nbgv get-version -v GitCommitIdShort)"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "app_version=${app_version}" >> "${GITHUB_OUTPUT}"
-          echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "version=${version}"
+            echo "app_version=${app_version}"
+            echo "short_sha=${short_sha}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Verify before publishing
         run: mise run ci
@@ -138,3 +164,45 @@ jobs:
           docker buildx imagetools inspect "${IMAGE_REPOSITORY}:latest" >/dev/null
           helm show chart "${CRD_CHART_REPOSITORY}" --version "${VERSION}" >/dev/null
           helm show chart "${CHART_REPOSITORY}" --version "${VERSION}" >/dev/null
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          CRD_CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator-crds
+          CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag_name="v${VERSION}"
+
+          if gh release view "${tag_name}" >/dev/null 2>&1; then
+            echo "Release ${tag_name} already exists; skipping creation."
+            exit 0
+          fi
+
+          notes="$(printf '%s\n' \
+            "Published after verifying the operator image and both Helm charts in GHCR." \
+            "" \
+            "Release log: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/CHANGELOG.md" \
+            "" \
+            "## OCI artifacts" \
+            "" \
+            "- Image: \`${IMAGE_REPOSITORY}:${VERSION}\`" \
+            "- CRD chart: \`${CRD_CHART_REPOSITORY} --version ${VERSION}\`" \
+            "- Operator chart: \`${CHART_REPOSITORY} --version ${VERSION}\`")"
+
+          release_flags=(
+            --target "${GITHUB_SHA}"
+            --title "${tag_name}"
+            --notes "${notes}"
+            --generate-notes
+          )
+
+          if [[ "${VERSION}" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
+
+          gh release create "${tag_name}" \
+            "dist/charts/omni-cluster-operator-crds-${VERSION}.tgz#omni-cluster-operator-crds-${VERSION}.tgz" \
+            "dist/charts/omni-cluster-operator-${VERSION}.tgz#omni-cluster-operator-${VERSION}.tgz" \
+            "${release_flags[@]}"

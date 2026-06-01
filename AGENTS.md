@@ -20,8 +20,20 @@ templates.
   the current Kubernetes context, accepts the local-test EULA values, and writes
   credentials under `.local/`.
 - Version published artifacts from root `version.json` with NBGV. The publish
-  workflow is master-only and pushes both the operator image and OCI Helm chart
-  to GHCR.
+  workflow is master-only and pushes the operator image plus both OCI Helm
+  charts to GHCR.
+- NBGV `pathFilters` intentionally keep docs-only changes from advancing
+  artifact versions. Keep publish workflow path filters aligned with
+  `version.json` path filters when changing release inputs.
+- For breaking changes, incompatible API/schema changes, new CRDs, meaningful
+  chart behavior changes, or other minor/major release-line changes, bump the
+  base `version` in `version.json` and keep `versionHeightOffsetAppliesTo`
+  aligned with the new base version.
+- `CHANGELOG.md` is for minor and major release notes only. When an agent makes
+  or reviews a change that bumps the base minor/major version, update
+  `CHANGELOG.md` under `Unreleased` in the same change. Do not require changelog
+  entries for ordinary patch fixes; GitHub Releases can use generated notes for
+  those.
 - Keep secrets out of samples except obvious placeholders.
 
 ## Generated Files

@@ -47,6 +47,7 @@ nav:
   - Reference:
       - API Reference: reference/api.md
       - Helm Chart: reference/helm-chart.md
+      - Release Notes: reference/release-notes.md
   - Guides:
       - Debugging: guides/debugging.md
   - Developer:
