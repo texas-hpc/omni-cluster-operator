@@ -5,6 +5,7 @@ type: application
 version: 0.0.0
 appVersion: 0.0.0
 home: https://github.com/texas-hpc/omni-cluster-operator
+icon: https://texas-hpc.github.io/omni-cluster-operator/assets/patch-logo.png
 annotations:
   artifacthub.io/license: Apache-2.0
 sources:
