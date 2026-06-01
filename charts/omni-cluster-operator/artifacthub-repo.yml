@@ -1,0 +1,6 @@
+# Artifact Hub assigns repositoryID after this OCI chart repository is added.
+# Add it here later to enable verified publisher status.
+# repositoryID: 00000000-0000-0000-0000-000000000000
+owners:
+  - name: Michael Willingham
+    email: michael@texashpc.com
