@@ -334,6 +334,157 @@ func TestOmniClusterDeletePassesDestroyMachines(t *testing.T) {
 	}
 }
 
+func TestOmniClusterDeleteRemovesLegacyFinalizer(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	deletionTime := metav1.Now()
+	cluster := testCluster()
+	cluster.Finalizers = []string{omniv1alpha1.LegacyFinalizer}
+	cluster.DeletionTimestamp = &deletionTime
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}).
+		WithObjects(testConnection(), cluster).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Verify the cluster was deleted from Omni
+	if len(omni.deleteCalls) != 1 || omni.deleteCalls[0] != testClusterName {
+		t.Fatalf("deleteCalls = %#v, want [edge]", omni.deleteCalls)
+	}
+
+	// Verify the legacy finalizer was removed
+	updated := &omniv1alpha1.OmniCluster{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get cluster: %v", err)
+	}
+	if len(updated.Finalizers) != 0 {
+		t.Fatalf("finalizers = %#v, want empty (legacy finalizer should be removed)", updated.Finalizers)
+	}
+}
+
+func TestOmniClusterDeleteRemovesBothFinalizers(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	deletionTime := metav1.Now()
+	cluster := testCluster()
+	// Cluster has both finalizers (migration scenario)
+	cluster.Finalizers = []string{omniv1alpha1.Finalizer, omniv1alpha1.LegacyFinalizer}
+	cluster.DeletionTimestamp = &deletionTime
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}).
+		WithObjects(testConnection(), cluster).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	// Verify both finalizers were removed
+	updated := &omniv1alpha1.OmniCluster{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get cluster: %v", err)
+	}
+	if len(updated.Finalizers) != 0 {
+		t.Fatalf("finalizers = %#v, want empty (both finalizers should be removed)", updated.Finalizers)
+	}
+}
+
+func TestOmniClusterDoesNotAddFinalizerWhenLegacyFinalizerPresent(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	cluster := testCluster()
+	cluster.Finalizers = []string{omniv1alpha1.LegacyFinalizer}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}).
+		WithObjects(testConnection(), cluster, testControlPlane(), testWorkers()).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
+
+	// First reconcile should not add new finalizer since legacy is present
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+
+	// Verify only the legacy finalizer is present (no new finalizer added)
+	updated := &omniv1alpha1.OmniCluster{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get cluster: %v", err)
+	}
+	if len(updated.Finalizers) != 1 || updated.Finalizers[0] != omniv1alpha1.LegacyFinalizer {
+		t.Fatalf("finalizers = %#v, want only legacy finalizer", updated.Finalizers)
+	}
+
+	// Verify reconciliation proceeded normally (sync was called)
+	if omni.syncCalls != 1 {
+		t.Fatalf("syncCalls = %d, want 1 (reconcile should proceed with legacy finalizer)", omni.syncCalls)
+	}
+}
+
+func TestOmniClusterAddsNewFinalizerWhenNoFinalizerPresent(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	cluster := testCluster()
+	// No finalizers initially
+	cluster.Finalizers = nil
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}).
+		WithObjects(testConnection(), cluster, testControlPlane(), testWorkers()).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
+
+	// First reconcile should add the new finalizer
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+
+	// Verify the new finalizer was added
+	updated := &omniv1alpha1.OmniCluster{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get cluster: %v", err)
+	}
+	if len(updated.Finalizers) != 1 || updated.Finalizers[0] != omniv1alpha1.Finalizer {
+		t.Fatalf("finalizers = %#v, want new finalizer", updated.Finalizers)
+	}
+
+	// Second reconcile should proceed with sync
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	if omni.syncCalls != 1 {
+		t.Fatalf("syncCalls = %d, want 1", omni.syncCalls)
+	}
+}
+
 func TestChildControllerMarksMissingCluster(t *testing.T) {
 	t.Parallel()
 

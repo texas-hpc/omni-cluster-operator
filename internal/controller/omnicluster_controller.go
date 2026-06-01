@@ -78,7 +78,8 @@ func (r *OmniClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.reconcileDelete(ctx, cluster)
 	}
 
-	if !controllerutil.ContainsFinalizer(cluster, omniv1alpha1.Finalizer) {
+	// Add the current finalizer if neither the current nor legacy finalizer is present
+	if !controllerutil.ContainsFinalizer(cluster, omniv1alpha1.Finalizer) && !controllerutil.ContainsFinalizer(cluster, omniv1alpha1.LegacyFinalizer) {
 		controllerutil.AddFinalizer(cluster, omniv1alpha1.Finalizer)
 		if err := r.Update(ctx, cluster); err != nil {
 			return ctrl.Result{}, err
@@ -199,7 +200,8 @@ func (r *OmniClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 func (r *OmniClusterReconciler) reconcileDelete(ctx context.Context, cluster *omniv1alpha1.OmniCluster) (ctrl.Result, error) {
-	if !controllerutil.ContainsFinalizer(cluster, omniv1alpha1.Finalizer) {
+	// If neither finalizer is present, nothing to do
+	if !controllerutil.ContainsFinalizer(cluster, omniv1alpha1.Finalizer) && !controllerutil.ContainsFinalizer(cluster, omniv1alpha1.LegacyFinalizer) {
 		return ctrl.Result{}, nil
 	}
 
@@ -230,7 +232,9 @@ func (r *OmniClusterReconciler) reconcileDelete(ctx context.Context, cluster *om
 		}
 	}
 
+	// Remove both finalizers to handle migration from legacy finalizer
 	controllerutil.RemoveFinalizer(cluster, omniv1alpha1.Finalizer)
+	controllerutil.RemoveFinalizer(cluster, omniv1alpha1.LegacyFinalizer)
 	if err := r.Update(ctx, cluster); err != nil {
 		return ctrl.Result{}, err
 	}

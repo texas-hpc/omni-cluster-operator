@@ -27,6 +27,8 @@ import (
 const (
 	// Finalizer is attached to resources that own remote Omni lifecycle.
 	Finalizer = "omni.texashpc.com/finalizer"
+	// LegacyFinalizer is the old finalizer value from before the API group rename.
+	LegacyFinalizer = "omni.texas-hpc.org/finalizer"
 
 	// ConditionReady reports whether the resource is ready for use.
 	ConditionReady = "Ready"
