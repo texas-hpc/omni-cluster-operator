@@ -187,6 +187,40 @@ func TestValuesMergesTalosDefaultsWithOverrides(t *testing.T) {
 	}
 }
 
+func TestValuesCiliumAgentOverrideReplacesDefaultsWithDistinctCapability(t *testing.T) {
+	t.Parallel()
+
+	install := &omniv1alpha1.OmniCilium{
+		Spec: omniv1alpha1.OmniCiliumSpec{
+			Values: &apiextensionsv1.JSON{Raw: []byte(`{"kubeProxyReplacement":true,"securityContext":{"capabilities":{"ciliumAgent":["SYS_TIME"]}}}`)},
+		},
+	}
+
+	values, enabled, err := Values(install)
+	if err != nil {
+		t.Fatalf("Values() error = %v", err)
+	}
+	if !enabled {
+		t.Fatal("Values() enabled = false, want true")
+	}
+
+	securityContext, ok := values["securityContext"].(map[string]any)
+	if !ok {
+		t.Fatalf("securityContext = %#v, want map", values["securityContext"])
+	}
+	capabilities, ok := securityContext["capabilities"].(map[string]any)
+	if !ok {
+		t.Fatalf("securityContext.capabilities = %#v, want map", securityContext["capabilities"])
+	}
+	got, ok := capabilities["ciliumAgent"].([]any)
+	if !ok {
+		t.Fatalf("ciliumAgent capabilities = %#v, want list", capabilities["ciliumAgent"])
+	}
+	if len(got) != 1 || got[0] != "SYS_TIME" {
+		t.Fatalf("ciliumAgent capabilities = %#v, want exact override [\"SYS_TIME\"]", got)
+	}
+}
+
 func TestValuesAcceptsStringKubeProxyReplacement(t *testing.T) {
 	t.Parallel()
 
@@ -423,6 +457,22 @@ func TestSecretHasCurrentManifest(t *testing.T) {
 	}
 	if !SecretHasCurrentManifest(secret, map[string][]byte{RenderedManifestSecretKey: []byte("manifest")}, "current") {
 		t.Fatal("SecretHasCurrentManifest() = false for current secret, want true")
+	}
+
+	secretWithoutAnnotations := &corev1.Secret{}
+	if SecretHasCurrentManifest(secretWithoutAnnotations, map[string][]byte{RenderedManifestSecretKey: []byte("manifest")}, "current") {
+		t.Fatal("SecretHasCurrentManifest() = true with nil annotations, want false")
+	}
+
+	secretWithoutSpecHashAnnotation := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				"other": "value",
+			},
+		},
+	}
+	if SecretHasCurrentManifest(secretWithoutSpecHashAnnotation, map[string][]byte{RenderedManifestSecretKey: []byte("manifest")}, "current") {
+		t.Fatal("SecretHasCurrentManifest() = true without spec hash annotation, want false")
 	}
 }
 
