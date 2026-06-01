@@ -3,7 +3,7 @@
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/omni-cluster-operator-crds)](https://artifacthub.io/packages/search?repo=omni-cluster-operator-crds)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/omni-cluster-operator)](https://artifacthub.io/packages/search?repo=omni-cluster-operator)
 
-Manage Sidero Omni cluster templates from Kubernetes.
+Manage Sidero Omni cluster templates from Kubernetes, without replacing Omni.
 
 > [!IMPORTANT]
 > `omni-cluster-operator` is an independent community project. It is not
@@ -13,7 +13,21 @@ Manage Sidero Omni cluster templates from Kubernetes.
 
 `omni-cluster-operator` gives platform teams a GitOps-friendly way to define
 Omni connections, cluster templates, machine groups, and deletion policy with
-normal Kubernetes custom resources.
+normal Kubernetes custom resources while keeping Omni as the lifecycle authority.
+
+## Which Operator Should I Use?
+
+Use `omni-cluster-operator` when Omni is part of your management plane and you
+want Kubernetes resources to render, validate, sync, and delete Omni cluster
+templates.
+
+If you want to manage Talos Linux clusters directly without Omni, consider
+[`talos-operator`](https://alperencelik.github.io/talos-operator/) instead. It
+provides Kubernetes custom resources for Talos cluster lifecycle management,
+including direct Talos configuration, upgrades, backups, and generated access
+secrets. See the docs site's
+[Choosing an Operator](https://texas-hpc.github.io/omni-cluster-operator/concepts/choosing-an-operator/)
+page for a more detailed comparison.
 
 Full user documentation is available at
 [texas-hpc.github.io/omni-cluster-operator](https://texas-hpc.github.io/omni-cluster-operator/).
