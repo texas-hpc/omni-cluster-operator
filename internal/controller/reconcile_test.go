@@ -1025,6 +1025,35 @@ func TestOmniClusterAddonRenderFailureMarksReadyFalse(t *testing.T) {
 	}
 }
 
+func TestOmniClusterAddonParseFailureMarksReadyFalse(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	renderer := &fakeAddonRenderer{manifest: []byte("apiVersion: v1\nkind: [")}
+	item := testAddon()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniClusterAddon{}).
+		WithObjects(testCluster(), item).
+		Build()
+
+	reconciler := &OmniClusterAddonReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "rendered manifest is invalid") {
+		t.Fatalf("Reconcile() error = %v, want rendered manifest is invalid", err)
+	}
+
+	updated := &omniv1alpha1.OmniClusterAddon{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get addon: %v", err)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
+		t.Fatalf("Ready condition = %#v, want False", got)
+	}
+}
+
 func TestOmniCiliumRenderFailureMarksReadyFalse(t *testing.T) {
 	t.Parallel()
 
@@ -1043,6 +1072,35 @@ func TestOmniCiliumRenderFailureMarksReadyFalse(t *testing.T) {
 
 	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "chart unavailable") {
 		t.Fatalf("Reconcile() error = %v, want chart unavailable", err)
+	}
+
+	updated := &omniv1alpha1.OmniCilium{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get cilium: %v", err)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
+		t.Fatalf("Ready condition = %#v, want False", got)
+	}
+}
+
+func TestOmniCiliumParseFailureMarksReadyFalse(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	renderer := &fakeCiliumRenderer{manifest: []byte("apiVersion: v1\nkind: [")}
+	install := testCilium()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCilium{}).
+		WithObjects(testCluster(), install).
+		Build()
+
+	reconciler := &OmniCiliumReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: install.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "rendered manifest is invalid") {
+		t.Fatalf("Reconcile() error = %v, want rendered manifest is invalid", err)
 	}
 
 	updated := &omniv1alpha1.OmniCilium{}
