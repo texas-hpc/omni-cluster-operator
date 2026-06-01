@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -174,6 +175,28 @@ func TestOmniCiliumValidation(t *testing.T) {
 		t.Fatalf("ValidateCreate() error = %v, want nil", err)
 	}
 
+	func TestOmniKubeconfigExportValidation(t *testing.T) {
+		t.Parallel()
+
+		validator := &OmniKubeconfigExportCustomValidator{}
+		export := validKubeconfigExport()
+
+		_, err := validator.ValidateCreate(context.Background(), export)
+		if err != nil {
+			t.Fatalf("ValidateCreate() error = %v, want nil", err)
+		}
+
+		export = validKubeconfigExport()
+		export.Spec.ServiceAccount.Groups = []string{"system:masters"}
+		_, err = validator.ValidateCreate(context.Background(), export)
+		requireErrorContains(t, err, "system:masters requires allowClusterAdmin=true")
+
+		export = validKubeconfigExport()
+		export.Spec.RenewBefore = &metav1.Duration{Duration: 24 * time.Hour}
+		_, err = validator.ValidateCreate(context.Background(), export)
+		requireErrorContains(t, err, "renewBefore must be less than ttl")
+	}
+
 	install.Spec.ChartVersion = " "
 	_, err = validator.ValidateCreate(context.Background(), install)
 	requireErrorContains(t, err, "chartVersion is required")
@@ -233,6 +256,23 @@ func validCilium() *omniv1alpha1.OmniCilium {
 			ChartVersion:    "1.18.3",
 			ChartRepository: "https://helm.cilium.io/",
 			Values:          &apiextensionsv1.JSON{Raw: []byte(`{"kubeProxyReplacement": true}`)},
+		},
+	}
+}
+
+func validKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
+	return &omniv1alpha1.OmniKubeconfigExport{
+		ObjectMeta: metav1.ObjectMeta{Name: "edge-automation-kubeconfig"},
+		Spec: omniv1alpha1.OmniKubeconfigExportSpec{
+			ClusterRef:      omniv1alpha1.OmniClusterRef{Name: validationClusterName},
+			TargetSecretRef: omniv1alpha1.LocalObjectReference{Name: "edge-automation-kubeconfig"},
+			ServiceAccount: omniv1alpha1.OmniKubeconfigServiceAccountSpec{
+				User:   "edge-automation",
+				Groups: []string{"cluster-automation"},
+			},
+			TTL:            metav1.Duration{Duration: 24 * time.Hour},
+			RenewBefore:    &metav1.Duration{Duration: 4 * time.Hour},
+			DeletionPolicy: omniv1alpha1.KubeconfigExportDeletionPolicyDelete,
 		},
 	}
 }

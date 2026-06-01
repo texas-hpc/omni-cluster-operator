@@ -250,7 +250,7 @@ kubectl describe omnicluster cluster-01 \
 
 ## Access the workload cluster
 
-After Omni creates the cluster and reports the Kubernetes API as available, get workload-cluster credentials from Omni. `omni-cluster-operator` does not automatically write a child-cluster kubeconfig Secret into the management cluster.
+After Omni creates the cluster and reports the Kubernetes API as available, choose one of the following paths for workload-cluster credentials.
 
 For human access, download the kubeconfig from the Omni UI, or use `omnictl`:
 
@@ -260,7 +260,29 @@ omnictl kubeconfig --cluster <omni-cluster-name> --merge
 
 This is the normal path for interactive `kubectl` access. Access is still governed by Omni authentication and access policy.
 
-For non-interactive automation, create a Kubernetes service-account kubeconfig intentionally:
+For non-interactive automation managed by this operator, create an explicit `OmniKubeconfigExport`:
+
+```yaml
+apiVersion: omni.texashpc.com/v1alpha1
+kind: OmniKubeconfigExport
+metadata:
+  name: cluster-01-automation-kubeconfig
+  namespace: omni-cluster-operator-system
+spec:
+  clusterRef:
+    name: cluster-01
+  targetSecretRef:
+    name: cluster-01-automation-kubeconfig
+  serviceAccount:
+    user: cluster-01-automation
+    groups:
+      - cluster-automation
+  ttl: 24h
+  renewBefore: 4h
+  deletionPolicy: Delete
+```
+
+You can still create a manual service-account kubeconfig with `omnictl`:
 
 ```sh
 omnictl kubeconfig \

@@ -102,6 +102,23 @@ Defines an optional Cilium install for one `OmniCluster`.
 
 Status includes rendered manifest Secret name, rendered manifest hash, manifest name, chart version, kube-proxy replacement state, and last render time.
 
+## OmniKubeconfigExport
+
+Defines an explicit opt-in service-account kubeconfig export for one `OmniCluster`.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `spec.clusterRef.name` | Yes | `OmniCluster` in the same namespace. |
+| `spec.targetSecretRef.name` | Yes | Secret name to write the kubeconfig into. |
+| `spec.serviceAccount.user` | Yes | Kubernetes user subject embedded in the exported kubeconfig. |
+| `spec.serviceAccount.groups` | Yes | Kubernetes groups embedded in the exported kubeconfig. |
+| `spec.ttl` | Yes | Service-account kubeconfig lifetime, for example `24h`. |
+| `spec.renewBefore` | No | Rotate this long before expiration. Must be less than `ttl`. |
+| `spec.allowClusterAdmin` | No | Must be `true` to allow the `system:masters` group. |
+| `spec.deletionPolicy` | No | `Delete` (default) or `Orphan` for the target Secret on resource deletion. |
+
+Status includes target Secret name, kubeconfig hash, last rotation time, expiration time, and conditions.
+
 ## Common nested fields
 
 ### Patches

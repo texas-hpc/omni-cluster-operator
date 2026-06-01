@@ -91,6 +91,22 @@ func ciliumRequestsForCluster(ctx context.Context, c client.Client, object clien
 	return sortRequests(requests)
 }
 
+func kubeconfigExportRequestsForCluster(ctx context.Context, c client.Client, object client.Object) []reconcile.Request {
+	exports := &omniv1alpha1.OmniKubeconfigExportList{}
+	if err := c.List(ctx, exports, client.InNamespace(object.GetNamespace())); err != nil {
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, export := range exports.Items {
+		if export.Spec.ClusterRef.Name == object.GetName() {
+			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: export.Namespace, Name: export.Name}})
+		}
+	}
+
+	return sortRequests(requests)
+}
+
 func sortRequests(requests []reconcile.Request) []reconcile.Request {
 	sort.Slice(requests, func(i, j int) bool {
 		return strings.Compare(requests[i].String(), requests[j].String()) < 0

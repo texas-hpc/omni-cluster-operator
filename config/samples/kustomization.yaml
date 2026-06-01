@@ -6,5 +6,6 @@ resources:
 - omni_v1alpha1_omnicluster.yaml
 - omni_v1alpha1_omnicontrolplane.yaml
 - omni_v1alpha1_omnimachine.yaml
+- omni_v1alpha1_omnikubeconfigexport.yaml
 - omni_v1alpha1_omniworkers.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

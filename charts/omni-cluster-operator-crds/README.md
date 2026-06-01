@@ -39,6 +39,7 @@ The chart installs CRDs in the `omni.texashpc.com` API group:
 | `OmniMachine` | Selects or configures machines used by cluster machine groups. |
 | `OmniWorkers` | Defines worker machine group configuration for an Omni cluster. |
 | `OmniCilium` | Renders and syncs Cilium resources for an Omni cluster. |
+| `OmniKubeconfigExport` | Exports a service-account workload-cluster kubeconfig into a Secret when explicitly requested. |
 
 ## Values
 

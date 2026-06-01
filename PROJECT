@@ -75,6 +75,18 @@ resources:
   controller: true
   domain: texashpc.com
   group: omni
+  kind: OmniKubeconfigExport
+  path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: texashpc.com
+  group: omni
   kind: OmniWorkers
   path: github.com/texas-hpc/omni-cluster-operator/api/v1alpha1
   version: v1alpha1

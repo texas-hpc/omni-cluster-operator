@@ -131,6 +131,45 @@ func validateConnection(connection *omniv1alpha1.OmniConnection) field.ErrorList
 	return allErrs
 }
 
+func validateKubeconfigExport(export *omniv1alpha1.OmniKubeconfigExport) field.ErrorList {
+	specPath := field.NewPath("spec")
+	var allErrs field.ErrorList
+
+	if strings.TrimSpace(export.Spec.ClusterRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("clusterRef", "name"), "clusterRef name is required"))
+	}
+	if strings.TrimSpace(export.Spec.TargetSecretRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("targetSecretRef", "name"), "targetSecretRef name is required"))
+	}
+	if strings.TrimSpace(export.Spec.ServiceAccount.User) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("serviceAccount", "user"), "serviceAccount user is required"))
+	}
+	if len(export.Spec.ServiceAccount.Groups) == 0 {
+		allErrs = append(allErrs, field.Required(specPath.Child("serviceAccount", "groups"), "at least one serviceAccount group is required"))
+	}
+	for i, group := range export.Spec.ServiceAccount.Groups {
+		if strings.TrimSpace(group) == "" {
+			allErrs = append(allErrs, field.Required(specPath.Child("serviceAccount", "groups").Index(i), "group must not be empty"))
+		}
+		if group == "system:masters" && !export.Spec.AllowClusterAdmin {
+			allErrs = append(allErrs, field.Forbidden(specPath.Child("serviceAccount", "groups").Index(i), "system:masters requires allowClusterAdmin=true"))
+		}
+	}
+	if export.Spec.TTL.Duration <= 0 {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("ttl"), export.Spec.TTL.String(), "ttl must be greater than zero"))
+	}
+	if export.Spec.RenewBefore != nil {
+		if export.Spec.RenewBefore.Duration < 0 {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("renewBefore"), export.Spec.RenewBefore.String(), "renewBefore must not be negative"))
+		}
+		if export.Spec.TTL.Duration > 0 && export.Spec.RenewBefore.Duration >= export.Spec.TTL.Duration {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("renewBefore"), export.Spec.RenewBefore.String(), "renewBefore must be less than ttl"))
+		}
+	}
+
+	return allErrs
+}
+
 func connectionWarnings(connection *omniv1alpha1.OmniConnection) []string {
 	if !connection.Spec.InsecureSkipTLSVerify {
 		return nil
