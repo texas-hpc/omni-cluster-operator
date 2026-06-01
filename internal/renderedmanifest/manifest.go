@@ -89,9 +89,15 @@ func Parse(manifest []byte) ([]apiextensionsv1.JSON, error) {
 
 // SecretHasCurrentManifest reports whether a Secret already contains the desired render.
 func SecretHasCurrentManifest(secret client.Object, data map[string][]byte, specHashAnnotation, specHash string) bool {
-	if secret.GetAnnotations()[specHashAnnotation] != specHash {
+	annotations := secret.GetAnnotations()
+	if annotations[specHashAnnotation] != specHash {
 		return false
 	}
 
-	return len(data[SecretKey]) > 0
+	manifest := data[SecretKey]
+	if len(manifest) == 0 {
+		return false
+	}
+
+	return annotations[HashAnnotation] == Hash(manifest)
 }

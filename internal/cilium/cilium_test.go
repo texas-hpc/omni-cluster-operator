@@ -441,10 +441,12 @@ func TestParseRenderedManifestRejectsEmptyAndInvalidDocuments(t *testing.T) {
 func TestSecretHasCurrentManifest(t *testing.T) {
 	t.Parallel()
 
+	manifest := []byte("manifest")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
 				RenderedManifestSpecHashKey: "current",
+				RenderedManifestHashKey:     RenderedManifestHash(manifest),
 			},
 		},
 	}
@@ -452,26 +454,29 @@ func TestSecretHasCurrentManifest(t *testing.T) {
 	if SecretHasCurrentManifest(secret, nil, "current") {
 		t.Fatal("SecretHasCurrentManifest() = true without manifest data, want false")
 	}
-	if SecretHasCurrentManifest(secret, map[string][]byte{RenderedManifestSecretKey: []byte("manifest")}, "stale") {
+	if SecretHasCurrentManifest(secret, map[string][]byte{RenderedManifestSecretKey: manifest}, "stale") {
 		t.Fatal("SecretHasCurrentManifest() = true for stale spec hash, want false")
 	}
-	if !SecretHasCurrentManifest(secret, map[string][]byte{RenderedManifestSecretKey: []byte("manifest")}, "current") {
+	if SecretHasCurrentManifest(secret, map[string][]byte{RenderedManifestSecretKey: []byte("corrupted")}, "current") {
+		t.Fatal("SecretHasCurrentManifest() = true for corrupted manifest, want false")
+	}
+	if !SecretHasCurrentManifest(secret, map[string][]byte{RenderedManifestSecretKey: manifest}, "current") {
 		t.Fatal("SecretHasCurrentManifest() = false for current secret, want true")
 	}
 
 	secretWithoutAnnotations := &corev1.Secret{}
-	if SecretHasCurrentManifest(secretWithoutAnnotations, map[string][]byte{RenderedManifestSecretKey: []byte("manifest")}, "current") {
+	if SecretHasCurrentManifest(secretWithoutAnnotations, map[string][]byte{RenderedManifestSecretKey: manifest}, "current") {
 		t.Fatal("SecretHasCurrentManifest() = true with nil annotations, want false")
 	}
 
 	secretWithoutSpecHashAnnotation := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				"other": "value",
+				RenderedManifestHashKey: RenderedManifestHash(manifest),
 			},
 		},
 	}
-	if SecretHasCurrentManifest(secretWithoutSpecHashAnnotation, map[string][]byte{RenderedManifestSecretKey: []byte("manifest")}, "current") {
+	if SecretHasCurrentManifest(secretWithoutSpecHashAnnotation, map[string][]byte{RenderedManifestSecretKey: manifest}, "current") {
 		t.Fatal("SecretHasCurrentManifest() = true without spec hash annotation, want false")
 	}
 }
