@@ -75,8 +75,9 @@ deployment.
 ## Documentation
 
 - [Installation](https://texas-hpc.github.io/omni-cluster-operator/getting-started/installation/)
-- [Create a cluster](https://texas-hpc.github.io/omni-cluster-operator/getting-started/create-a-cluster/)
-- [Install Cilium](https://texas-hpc.github.io/omni-cluster-operator/getting-started/install-cilium/)
+- [Cluster lifecycle](https://texas-hpc.github.io/omni-cluster-operator/getting-started/create-a-cluster/)
+- [Manage Cilium](https://texas-hpc.github.io/omni-cluster-operator/getting-started/install-cilium/)
+- [GitOps](https://texas-hpc.github.io/omni-cluster-operator/getting-started/gitops/)
 - [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
 - [Debugging](https://texas-hpc.github.io/omni-cluster-operator/guides/debugging/)
 - [Contributing](CONTRIBUTING.md)

@@ -1,0 +1,163 @@
+# GitOps with FluxCD or Argo CD
+
+The Omni custom resources are good GitOps objects, but they are not passive configuration. `OmniCluster` has a finalizer and performs remote Omni operations. Treat changes to these resources the same way you would treat cluster lifecycle changes in Omni itself.
+
+## Ordering
+
+Install dependencies before applying cluster resources:
+
+1. cert-manager
+2. `omni-cluster-operator-crds` chart
+3. `omni-cluster-operator` chart
+4. Omni service account Secret
+5. `OmniConnection`
+6. `OmniCluster` and child resources
+
+The default operator watches only its release namespace. Put the `OmniConnection`, `OmniCluster`, `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, `OmniCilium`, and referenced Secret in that namespace unless you have changed the deployment model.
+
+## Secrets
+
+Do not commit real Omni service account keys. Use your normal secret workflow, such as SOPS, External Secrets Operator, Sealed Secrets, or a manually created Secret.
+
+The Secret must exist before the `OmniConnection` can become ready:
+
+```yaml
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniConnection
+metadata:
+  name: omni
+  namespace: omni-cluster-operator-system
+spec:
+  endpoint: https://omni.example.com
+  auth:
+    serviceAccountSecretRef:
+      name: omni-service-account
+      key: serviceAccountKey
+```
+
+## Stage large changes
+
+Use `OmniCluster.spec.suspend: true` to stage multi-object changes without syncing each intermediate state to Omni.
+
+For example, suspend before changing the control plane, workers, machine-specific patches, and Cilium in one pull request:
+
+```yaml
+apiVersion: omni.texas-hpc.org/v1alpha1
+kind: OmniCluster
+metadata:
+  name: cluster-01
+  namespace: omni-cluster-operator-system
+spec:
+  connectionRef:
+    name: omni
+  kubernetes:
+    version: v1.35.1
+  talos:
+    version: v1.13.3
+  suspend: true
+```
+
+After all related resources are merged and applied, remove `suspend` or set it to `false`.
+
+## Deletion and pruning
+
+GitOps pruning can delete an `OmniCluster`. That is a remote Omni lifecycle operation, not just local cleanup.
+
+Before removing an `OmniCluster` from Git, choose the intended deletion behavior:
+
+| Intent | Configuration before deletion |
+| --- | --- |
+| Delete the remote Omni cluster through Omni template deletion. | Leave `spec.deletePolicy.orphan` unset or `false`. |
+| Remove Kubernetes ownership but keep the remote Omni cluster. | Set `spec.deletePolicy.orphan: true`, wait for the change to apply, then remove the resource from Git. |
+| Force disconnected machines to be removed during remote deletion. | Set `spec.deletePolicy.destroyMachines: true` only when that behavior is intentional. |
+
+`orphan` and `destroyMachines` are mutually exclusive.
+
+When deleting a full cluster from Git, delete child resources and the parent in a controlled change. If your GitOps tool prunes everything at once, the parent `OmniCluster` finalizer still controls remote deletion, but the remaining child objects may disappear from Kubernetes before the final remote operation finishes.
+
+## Cilium in GitOps
+
+`OmniCilium` renders the Cilium Helm chart into a Secret and the parent `OmniCluster` injects that rendered output into the Omni template.
+
+For GitOps:
+
+- Keep at most one `OmniCilium` per `OmniCluster`.
+- Avoid another `OmniCluster.spec.kubernetes.manifests[]` entry with the same `spec.manifestName`.
+- Use `spec.mode: full` when Cilium should remain managed through Omni manifest sync.
+- Use `spec.mode: one-time` only when you have a handoff plan.
+- Do not assume deleting `OmniCilium` is a complete workload-cluster Cilium uninstall.
+- Treat moves from Cilium to another CNI, or from another CNI to Cilium, as staged network migrations. Use `spec.suspend` while changing CNI ownership and kube-proxy behavior.
+
+## FluxCD notes
+
+Use separate Flux `Kustomization` objects or explicit `dependsOn` ordering when the operator, secret source, and cluster resources live in different paths.
+
+A common layout is:
+
+```text
+clusters/management/
+  cert-manager/
+  omni-cluster-operator/
+  omni-secrets/
+  omni-clusters/
+```
+
+The cluster resources should depend on the operator and secret path:
+
+```yaml
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: omni-clusters
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./clusters/management/omni-clusters
+  prune: true
+  wait: true
+  dependsOn:
+    - name: omni-cluster-operator
+    - name: omni-secrets
+  sourceRef:
+    kind: GitRepository
+    name: platform
+```
+
+Flux applies status updates from controllers outside Git. Do not commit `status` fields. If a deletion is stuck, inspect the `OmniCluster` finalizer and the operator logs before forcing removal.
+
+## Argo CD notes
+
+Use sync waves or separate Applications to order CRDs, the operator, secrets, and cluster resources.
+
+Example sync-wave annotations:
+
+```yaml
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+```
+
+Suggested waves:
+
+| Wave | Contents |
+| --- | --- |
+| `0` | cert-manager |
+| `10` | Omni CRD chart |
+| `20` | Omni operator chart and Omni service account Secret |
+| `30` | `OmniConnection`, `OmniCluster`, and child resources |
+
+Keep pruning deliberate on Applications that contain `OmniCluster` resources. If an Argo CD Application is deleted with cascading deletion enabled, Argo can remove the Kubernetes custom resources and trigger the operator's remote Omni deletion path.
+
+Argo CD may show generated fields, defaults, and status as live-only state. Keep manifests focused on `metadata` and `spec`; do not add controller-owned `status` fields to Git.
+
+## Review checklist
+
+Before merging a GitOps change that touches Omni resources, check:
+
+- Does it create, update, pause, or delete a remote Omni cluster?
+- Are CRDs, webhooks, cert-manager, and the service account Secret already present?
+- Are all resources in the operator release namespace?
+- Is `spec.suspend` needed while multiple resources change together?
+- If anything is removed from Git, is the deletion policy intentional?
+- If Cilium changes, is `spec.mode` still the intended ownership model?
+- If CNI ownership changes, is the old CNI cleanup, replacement CNI install, and kube-proxy behavior accounted for?
