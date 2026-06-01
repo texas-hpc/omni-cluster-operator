@@ -39,6 +39,7 @@ type Inputs struct {
 	ControlPlane *omniv1alpha1.OmniControlPlane
 	Workers      []omniv1alpha1.OmniWorkers
 	Machines     []omniv1alpha1.OmniMachine
+	Addons       []AddonInput
 	Cilium       *CiliumInput
 }
 
@@ -50,7 +51,16 @@ type Result struct {
 	ControlPlaneRef string
 	WorkersRefs     []string
 	MachineRefs     []string
+	AddonRefs       []string
 	CiliumRef       string
+}
+
+// AddonInput is a rendered generic addon to include in an Omni cluster template.
+type AddonInput struct {
+	ResourceName string
+	ManifestName string
+	Mode         string
+	Manifest     []apiextensionsv1.JSON
 }
 
 // CiliumInput is a rendered Cilium installation to include in an Omni cluster template.
@@ -195,15 +205,27 @@ func Render(in Inputs) (*Result, error) {
 		return machineID(&machines[i]) < machineID(&machines[j])
 	})
 
+	addons := append([]AddonInput(nil), in.Addons...)
+	sort.Slice(addons, func(i, j int) bool {
+		if addons[i].ManifestName == addons[j].ManifestName {
+			return addons[i].ResourceName < addons[j].ResourceName
+		}
+
+		return addons[i].ManifestName < addons[j].ManifestName
+	})
+
 	clusterName := ClusterName(in.Cluster)
-	if err := validateCiliumManifestName(in.Cluster, in.Cilium); err != nil {
+	if err := validateManifestNames(in.Cluster, addons, in.Cilium); err != nil {
 		return nil, err
 	}
 
-	docs := []any{renderCluster(in.Cluster, clusterName, in.Cilium), renderControlPlane(in.ControlPlane)}
+	docs := []any{renderCluster(in.Cluster, clusterName, addons, in.Cilium), renderControlPlane(in.ControlPlane)}
 	result := &Result{
 		ClusterName:     clusterName,
 		ControlPlaneRef: in.ControlPlane.Name,
+	}
+	for _, item := range addons {
+		result.AddonRefs = append(result.AddonRefs, item.ResourceName)
 	}
 	if in.Cilium != nil {
 		result.CiliumRef = in.Cilium.ResourceName
@@ -277,9 +299,12 @@ func ClusterName(cluster *omniv1alpha1.OmniCluster) string {
 	return cluster.Name
 }
 
-func renderCluster(cluster *omniv1alpha1.OmniCluster, clusterName string, cilium *CiliumInput) clusterDoc {
+func renderCluster(cluster *omniv1alpha1.OmniCluster, clusterName string, addons []AddonInput, cilium *CiliumInput) clusterDoc {
 	patches := append([]omniv1alpha1.Patch(nil), cluster.Spec.Patches...)
 	manifests := append([]omniv1alpha1.KubernetesManifest(nil), cluster.Spec.Kubernetes.Manifests...)
+	for _, item := range addons {
+		manifests = append(manifests, addonManifest(&item))
+	}
 	if cilium != nil {
 		patches = append(patches, ciliumPatch(cilium))
 		manifests = append(manifests, ciliumManifest(cilium))
@@ -302,19 +327,49 @@ func renderCluster(cluster *omniv1alpha1.OmniCluster, clusterName string, cilium
 	}
 }
 
-func validateCiliumManifestName(cluster *omniv1alpha1.OmniCluster, cilium *CiliumInput) error {
-	if cilium == nil {
-		return nil
+func validateManifestNames(cluster *omniv1alpha1.OmniCluster, addons []AddonInput, cilium *CiliumInput) error {
+	owners := map[string]string{}
+	for _, existing := range cluster.Spec.Kubernetes.Manifests {
+		if err := claimManifestName(owners, existing.Name, "OmniCluster.spec.kubernetes.manifests[]"); err != nil {
+			return err
+		}
 	}
 
-	manifest := ciliumManifest(cilium)
-	for _, existing := range cluster.Spec.Kubernetes.Manifests {
-		if existing.Name == manifest.Name {
-			return fmt.Errorf("duplicate OmniCluster.spec.kubernetes.manifests[].name %q conflicts with OmniCilium manifest", manifest.Name)
+	for _, item := range addons {
+		if err := claimManifestName(owners, addonManifest(&item).Name, fmt.Sprintf("OmniClusterAddon %q", item.ResourceName)); err != nil {
+			return err
+		}
+	}
+
+	if cilium != nil {
+		if err := claimManifestName(owners, ciliumManifest(cilium).Name, fmt.Sprintf("OmniCilium %q", cilium.ResourceName)); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+func claimManifestName(owners map[string]string, name, owner string) error {
+	if existing := owners[name]; existing != "" {
+		return fmt.Errorf("duplicate Kubernetes manifest name %q for %s conflicts with %s", name, owner, existing)
+	}
+
+	owners[name] = owner
+	return nil
+}
+
+func addonManifest(item *AddonInput) omniv1alpha1.KubernetesManifest {
+	mode := item.Mode
+	if mode == "" {
+		mode = defaultManifestMode
+	}
+
+	return omniv1alpha1.KubernetesManifest{
+		Name:   item.ManifestName,
+		Mode:   mode,
+		Inline: item.Manifest,
+	}
 }
 
 func ciliumPatch(cilium *CiliumInput) omniv1alpha1.Patch {

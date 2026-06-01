@@ -12,7 +12,7 @@ Use it when you want:
 - GitOps-friendly Omni cluster lifecycle configuration.
 - Omni service account keys stored in Kubernetes Secrets.
 - Separate Kubernetes resources for cluster settings, control plane, workers, and static machines.
-- Optional Cilium rendering through the operator while Omni applies raw manifests.
+- Optional Helm-rendered addons, including Cilium, while Omni applies raw manifests.
 - Finalizer-based remote cleanup, with an orphan mode when you want to keep the Omni cluster after deleting Kubernetes resources.
 
 ## Which operator should I use?
@@ -26,11 +26,12 @@ If you want to manage Talos Linux clusters directly without Omni, consider [`tal
 1. [Install the operator](getting-started/installation.md).
 2. [Choose the right operator](concepts/choosing-an-operator.md), if you are comparing Omni-backed and direct Talos lifecycle management.
 3. [Manage a cluster lifecycle](getting-started/create-a-cluster.md).
-4. [Manage Cilium](getting-started/install-cilium.md), if the cluster should receive Cilium through Omni manifest sync.
-5. [Configure NVIDIA GPU workers](getting-started/nvidia-gpu.md), if the cluster should run GPU workloads.
-6. [Plan GitOps ordering and deletion behavior](getting-started/gitops.md).
-7. [Check status and debug reconciliation](guides/debugging.md).
-8. Use the [API reference](reference/api.md) when writing manifests.
+4. [Manage addons](getting-started/manage-addons.md), if Helm-rendered applications should be applied through Omni manifest sync.
+5. [Manage Cilium](getting-started/install-cilium.md), if the cluster should receive Cilium through Omni manifest sync.
+6. [Configure NVIDIA GPU workers](getting-started/nvidia-gpu.md), if the cluster should run GPU workloads.
+7. [Plan GitOps ordering and deletion behavior](getting-started/gitops.md).
+8. [Check status and debug reconciliation](guides/debugging.md).
+9. Use the [API reference](reference/api.md) when writing manifests.
 
 ## Important model
 
@@ -43,6 +44,7 @@ flowchart LR
   ControlPlane["OmniControlPlane"] --> Cluster
   Workers["OmniWorkers"] --> Cluster
   Machine["OmniMachine"] --> Cluster
+  Addon["OmniClusterAddon"] --> Cluster
   Cluster --> Omni["Sidero Omni"]
 ```
 

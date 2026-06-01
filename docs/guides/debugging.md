@@ -61,24 +61,24 @@ The chart installs validating webhooks. If `kubectl apply` fails before an objec
 - Reserved worker set name `control-planes`.
 - Invalid version strings.
 - Ambiguous inline and file-backed patch or manifest sources.
-- More than one `OmniCilium` referencing the same `OmniCluster`.
-- Duplicate Cilium manifest name between `OmniCilium.spec.manifestName` and `OmniCluster.spec.kubernetes.manifests[].name`.
+- Invalid addon Helm repository, chart, version, or values shape.
+- Duplicate manifest names between `OmniCluster.spec.kubernetes.manifests[]`, `OmniClusterAddon.spec.manifestName`, and legacy `OmniCilium.spec.manifestName`.
 
-## Cilium render issues
+## Addon render issues
 
-`OmniCilium` renders the Cilium Helm chart and caches the YAML in a Secret before `OmniCluster` syncs it to Omni.
+`OmniClusterAddon` renders a Helm chart and caches the YAML in a Secret before `OmniCluster` syncs it to Omni. Legacy `OmniCilium` uses the same pattern.
 
-If the parent `OmniCluster` is waiting on Cilium, check:
+If the parent `OmniCluster` is waiting on an addon, check:
 
 ```sh
-kubectl get omniciliums,secrets \
+kubectl get omniclusteraddons,omniciliums,secrets \
   --namespace omni-cluster-operator-system
 
-kubectl describe omnicilium edge-cilium \
+kubectl describe omniclusteraddon cluster-01-cilium \
   --namespace omni-cluster-operator-system
 ```
 
-The rendered manifest Secret is named `<omnicilium-name>-cilium-manifest`. Render failures usually point to an invalid chart version, unreachable chart repository, or invalid `spec.values`.
+Generic addon rendered manifest Secrets are named `<omniclusteraddon-name>-addon-manifest`. Legacy Cilium Secrets are named `<omnicilium-name>-cilium-manifest`. Render failures usually point to an invalid chart version, unreachable chart repository, or invalid values.
 
 ## Stuck deletion
 

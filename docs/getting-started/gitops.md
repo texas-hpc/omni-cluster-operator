@@ -13,7 +13,7 @@ Install dependencies before applying cluster resources:
 5. `OmniConnection`
 6. `OmniCluster` and child resources
 
-The default operator watches only its release namespace. Put the `OmniConnection`, `OmniCluster`, `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, `OmniCilium`, and referenced Secret in that namespace unless you have changed the deployment model.
+The default operator watches only its release namespace. Put the `OmniConnection`, `OmniCluster`, `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, `OmniClusterAddon`, legacy `OmniCilium`, and referenced Secret in that namespace unless you have changed the deployment model.
 
 ## Secrets
 
@@ -39,7 +39,7 @@ spec:
 
 Use `OmniCluster.spec.suspend: true` to stage multi-object changes without syncing each intermediate state to Omni.
 
-For example, suspend before changing the control plane, workers, machine-specific patches, and Cilium in one pull request:
+For example, suspend before changing the control plane, workers, machine-specific patches, and addons in one pull request:
 
 ```yaml
 apiVersion: omni.texashpc.com/v1alpha1
@@ -75,17 +75,18 @@ Before removing an `OmniCluster` from Git, choose the intended deletion behavior
 
 When deleting a full cluster from Git, delete child resources and the parent in a controlled change. If your GitOps tool prunes everything at once, the parent `OmniCluster` finalizer still controls remote deletion, but the remaining child objects may disappear from Kubernetes before the final remote operation finishes.
 
-## Cilium in GitOps
+## Addons in GitOps
 
-`OmniCilium` renders the Cilium Helm chart into a Secret and the parent `OmniCluster` injects that rendered output into the Omni template.
+`OmniClusterAddon` renders a Helm chart into a Secret and the parent `OmniCluster` injects that rendered output into the Omni template. Legacy `OmniCilium` follows the same rendered-manifest cache model for existing Cilium users.
 
 For GitOps:
 
-- Keep at most one `OmniCilium` per `OmniCluster`.
-- Avoid another `OmniCluster.spec.kubernetes.manifests[]` entry with the same `spec.manifestName`.
-- Use `spec.mode: full` when Cilium should remain managed through Omni manifest sync.
+- Keep addon `spec.manifestName` values unique for each `OmniCluster`.
+- Avoid another `OmniCluster.spec.kubernetes.manifests[]` entry with the same manifest name.
+- Use `spec.mode: full` when an addon should remain managed through Omni manifest sync.
 - Use `spec.mode: one-time` only when you have a handoff plan.
-- Do not assume deleting `OmniCilium` is a complete workload-cluster Cilium uninstall.
+- Do not assume deleting an addon is a complete workload-cluster uninstall.
+- Put chart-specific Talos settings, such as Cilium CNI and kube-proxy patches, in `OmniCluster.spec.patches`.
 - Treat moves from Cilium to another CNI, or from another CNI to Cilium, as staged network migrations. Use `spec.suspend` while changing CNI ownership and kube-proxy behavior.
 
 ## FluxCD notes
@@ -159,5 +160,5 @@ Before merging a GitOps change that touches Omni resources, check:
 - Are all resources in the operator release namespace?
 - Is `spec.suspend` needed while multiple resources change together?
 - If anything is removed from Git, is the deletion policy intentional?
-- If Cilium changes, is `spec.mode` still the intended ownership model?
+- If an addon changes, is `spec.mode` still the intended ownership model?
 - If CNI ownership changes, is the old CNI cleanup, replacement CNI install, and kube-proxy behavior accounted for?

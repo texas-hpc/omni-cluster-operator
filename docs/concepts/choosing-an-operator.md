@@ -24,7 +24,7 @@ It intentionally does not replace Omni's cluster-template behavior. The operator
 This is a good fit when:
 
 - Omni owns machine inventory, assignment, SideroLink connectivity, and cluster lifecycle.
-- You want cluster settings, control planes, workers, static machines, and optional Cilium rendering expressed as Kubernetes resources.
+- You want cluster settings, control planes, workers, static machines, and optional Helm-rendered addons expressed as Kubernetes resources.
 - Your platform workflow already treats Omni as the source of truth for Talos cluster creation.
 
 ## How talos-operator fits

@@ -1,6 +1,7 @@
 {{- if and .Values.rbac.create .Values.rbac.helperRoles.create }}
 {{- $resources := list
   (dict "resource" "omniciliums" "name" "omnicilium")
+  (dict "resource" "omniclusteraddons" "name" "omniclusteraddon")
   (dict "resource" "omniclusters" "name" "omnicluster")
   (dict "resource" "omniconnections" "name" "omniconnection")
   (dict "resource" "omnicontrolplanes" "name" "omnicontrolplane")

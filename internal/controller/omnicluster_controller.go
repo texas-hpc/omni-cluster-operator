@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,11 +38,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+	"github.com/texas-hpc/omni-cluster-operator/internal/addon"
 	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omnitemplate"
 )
 
+var errAddonRenderPending = errors.New("OmniClusterAddon render is pending")
 var errCiliumRenderPending = errors.New("OmniCilium render is pending")
 
 // OmniClusterReconciler reconciles a OmniCluster object
@@ -59,6 +62,7 @@ type OmniClusterReconciler struct {
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnicontrolplanes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniworkers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnimachines,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusteraddons,verbs=get;list;watch
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniciliums,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
@@ -111,7 +115,7 @@ func (r *OmniClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	inputs, err := r.templateInputs(ctx, cluster)
 	if err != nil {
-		if errors.Is(err, errCiliumRenderPending) {
+		if errors.Is(err, errAddonRenderPending) || errors.Is(err, errCiliumRenderPending) {
 			return ctrl.Result{RequeueAfter: requeueAfter}, nil
 		}
 
@@ -286,14 +290,71 @@ func (r *OmniClusterReconciler) templateInputs(ctx context.Context, cluster *omn
 	if err != nil {
 		return omnitemplate.Inputs{}, err
 	}
+	addonInputs, err := r.addonInputs(ctx, cluster)
+	if err != nil {
+		return omnitemplate.Inputs{}, err
+	}
 
 	return omnitemplate.Inputs{
 		Cluster:      cluster,
 		ControlPlane: &selectedControlPlanes[0],
 		Workers:      workers,
 		Machines:     machines,
+		Addons:       addonInputs,
 		Cilium:       ciliumInput,
 	}, nil
+}
+
+func (r *OmniClusterReconciler) addonInputs(ctx context.Context, cluster *omniv1alpha1.OmniCluster) ([]omnitemplate.AddonInput, error) {
+	addonList := &omniv1alpha1.OmniClusterAddonList{}
+	if err := r.List(ctx, addonList, client.InNamespace(cluster.Namespace)); err != nil {
+		return nil, err
+	}
+
+	var selected []omniv1alpha1.OmniClusterAddon
+	for _, item := range addonList.Items {
+		if item.Spec.ClusterRef.Name == cluster.Name {
+			selected = append(selected, item)
+		}
+	}
+	sort.Slice(selected, func(i, j int) bool {
+		return selected[i].Name < selected[j].Name
+	})
+
+	var inputs []omnitemplate.AddonInput
+	for _, item := range selected {
+		specHash, err := addon.SpecHash(&item)
+		if err != nil {
+			return nil, fmt.Errorf("OmniClusterAddon %q is invalid: %w", item.Name, err)
+		}
+
+		secret := &corev1.Secret{}
+		secretKey := client.ObjectKey{Namespace: item.Namespace, Name: addon.RenderedManifestSecretName(&item)}
+		if err := r.Get(ctx, secretKey, secret); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, fmt.Errorf("%w: OmniClusterAddon %q has no rendered manifest Secret %q", errAddonRenderPending, item.Name, secretKey.Name)
+			}
+
+			return nil, fmt.Errorf("OmniClusterAddon %q has no rendered manifest Secret %q: %w", item.Name, secretKey.Name, err)
+		}
+		if !addon.SecretHasCurrentManifest(secret, secret.Data, specHash) {
+			return nil, fmt.Errorf("%w: OmniClusterAddon %q rendered manifest Secret %q is not current", errAddonRenderPending, item.Name, secretKey.Name)
+		}
+
+		objects, err := addon.ParseRenderedManifest(secret.Data[addon.RenderedManifestSecretKey])
+		if err != nil {
+			return nil, fmt.Errorf("parse OmniClusterAddon %q rendered manifest: %w", item.Name, err)
+		}
+
+		inputs = append(inputs, omnitemplate.AddonInput{
+			ResourceName: item.Name,
+			ManifestName: addon.ManifestName(&item),
+			Mode:         addon.Mode(&item),
+			Manifest:     objects,
+		})
+	}
+
+	return inputs, nil
 }
 
 func (r *OmniClusterReconciler) ciliumInput(ctx context.Context, cluster *omniv1alpha1.OmniCluster) (*omnitemplate.CiliumInput, error) {
@@ -399,6 +460,7 @@ func setRenderedStatus(status *omniv1alpha1.OmniClusterStatus, cluster *omniv1al
 	status.ControlPlaneRef = rendered.ControlPlaneRef
 	status.WorkersRefs = rendered.WorkersRefs
 	status.MachineRefs = rendered.MachineRefs
+	status.AddonRefs = rendered.AddonRefs
 	status.CiliumRef = rendered.CiliumRef
 }
 
@@ -427,7 +489,9 @@ func (r *OmniClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&omniv1alpha1.OmniControlPlane{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Watches(&omniv1alpha1.OmniWorkers{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Watches(&omniv1alpha1.OmniMachine{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniClusterAddon{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Watches(&omniv1alpha1.OmniCilium{}, handler.EnqueueRequestsFromMapFunc(requestForChildCluster), builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersForAddonSecret)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.clustersForCiliumSecret)).
 		Named("omnicluster").
 		Complete(r)
@@ -440,6 +504,8 @@ func requestForChildCluster(_ context.Context, object client.Object) []reconcile
 	case *omniv1alpha1.OmniWorkers:
 		return requestForClusterRef(object.GetNamespace(), typed.Spec.ClusterRef.Name)
 	case *omniv1alpha1.OmniMachine:
+		return requestForClusterRef(object.GetNamespace(), typed.Spec.ClusterRef.Name)
+	case *omniv1alpha1.OmniClusterAddon:
 		return requestForClusterRef(object.GetNamespace(), typed.Spec.ClusterRef.Name)
 	case *omniv1alpha1.OmniCilium:
 		return requestForClusterRef(object.GetNamespace(), typed.Spec.ClusterRef.Name)
@@ -468,6 +534,26 @@ func (r *OmniClusterReconciler) clustersForConnection(ctx context.Context, objec
 	for _, cluster := range clusterList.Items {
 		if cluster.Spec.ConnectionRef.Name == object.GetName() {
 			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: cluster.Namespace, Name: cluster.Name}})
+		}
+	}
+
+	return sortRequests(requests)
+}
+
+func (r *OmniClusterReconciler) clustersForAddonSecret(ctx context.Context, object client.Object) []reconcile.Request {
+	if object.GetLabels()[addon.RenderedManifestOwnerLabel] == "" {
+		return nil
+	}
+
+	addonList := &omniv1alpha1.OmniClusterAddonList{}
+	if err := r.List(ctx, addonList, client.InNamespace(object.GetNamespace())); err != nil {
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, item := range addonList.Items {
+		if addon.RenderedManifestSecretName(&item) == object.GetName() {
+			requests = append(requests, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: item.Namespace, Name: item.Spec.ClusterRef.Name}})
 		}
 	}
 

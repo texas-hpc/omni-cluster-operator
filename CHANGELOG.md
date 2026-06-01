@@ -14,7 +14,14 @@ entries under the released version heading.
 
 ### Added
 
+- Added `OmniClusterAddon` for generic Helm-rendered manifests that are cached
+  in Kubernetes Secrets and injected into `OmniCluster` templates.
+
 ### Changed
+
+- Updated Cilium samples and docs to use `OmniClusterAddon` plus explicit
+  `OmniCluster.spec.patches`; `OmniCilium` remains available as a legacy
+  compatibility resource.
 
 ### Fixed
 

@@ -7,7 +7,7 @@ Use these resources to manage the full Omni cluster template lifecycle from Kube
 - Pause remote sync while preparing a larger change.
 - Delete the remote Omni cluster or orphan it intentionally.
 
-Create one `OmniConnection`, one `OmniCluster`, and exactly one `OmniControlPlane` for each cluster. Add `OmniWorkers`, `OmniMachine`, and `OmniCilium` only when the cluster needs them.
+Create one `OmniConnection`, one `OmniCluster`, and exactly one `OmniControlPlane` for each cluster. Add `OmniWorkers`, `OmniMachine`, and `OmniClusterAddon` only when the cluster needs them.
 
 If you do not create any workers, configure Talos to allow workloads on the control plane nodes.
 
@@ -22,7 +22,7 @@ omni-cluster-operator/
       control-plane.yaml
       workers.yaml
       machines.yaml
-      cilium.yaml
+      addons.yaml
     cluster-02/
       cluster.yaml
       control-plane.yaml
@@ -38,7 +38,7 @@ The examples below use static Omni machine IDs. Replace the endpoint, versions, 
 
 `OmniCluster` is the resource with remote side effects. It selects the shared `OmniConnection`, gathers child resources by `spec.clusterRef.name`, renders one Omni cluster template, validates it with Omni's public client code, syncs it to Omni, and reports status back through Kubernetes conditions.
 
-Child resources do not talk to Omni directly. Updating an `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, or `OmniCilium` causes the parent `OmniCluster` to render and sync a new template.
+Child resources do not talk to Omni directly. Updating an `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, or `OmniClusterAddon` causes the parent `OmniCluster` to render and sync a new template.
 
 ```mermaid
 flowchart LR
@@ -47,7 +47,7 @@ flowchart LR
   ControlPlane["OmniControlPlane"] --> Cluster
   Workers["OmniWorkers"] --> Cluster
   Machine["OmniMachine"] --> Cluster
-  Cilium["OmniCilium"] --> Cluster
+  Addon["OmniClusterAddon"] --> Cluster
   Cluster --> Omni["Omni template sync"]
 ```
 
@@ -137,7 +137,7 @@ spec:
 
 ## Optional: install Cilium
 
-Use `OmniCilium` when the cluster should manage Cilium through Omni manifest sync. See [Manage Cilium](install-cilium.md) for the create, update, and delete behavior.
+Use `OmniClusterAddon` when the cluster should manage Cilium through Omni manifest sync. See [Manage Cilium](install-cilium.md) for the Cilium-specific Talos patches and migration behavior.
 
 ## Optional: use machine classes
 
@@ -293,7 +293,7 @@ Common updates include:
 - Add or remove an `OmniWorkers` resource.
 - Change worker set `spec.machineClass.size` or explicit `spec.machines`.
 - Add or edit an `OmniMachine` for per-node install disk, patches, extensions, or kernel args.
-- Add or edit an `OmniCilium` resource for Cilium manifest management.
+- Add or edit an `OmniClusterAddon` resource for Helm-rendered manifest management.
 
 Example version update:
 
