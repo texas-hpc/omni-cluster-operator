@@ -1,0 +1,121 @@
+# Contributing
+
+Thanks for improving `omni-cluster-operator`. This project is a
+Kubebuilder/controller-runtime operator for managing Sidero Omni cluster
+templates from Kubernetes custom resources.
+
+## Development Setup
+
+Install the pinned toolchain with `mise`:
+
+```sh
+mise trust
+mise install
+```
+
+There is intentionally no Makefile. Use `mise run <task>` for project
+automation. Executable task scripts live in `mise-tasks/`.
+
+For local Kubernetes development:
+
+```sh
+mise run kind-up
+mise run cert-manager-up
+mise run tilt
+```
+
+The default deployment includes validating webhooks and cert-manager
+`Certificate` resources, so cert-manager must be installed before deploying the
+operator, running Tilt, or running e2e tests.
+
+## Project Boundaries
+
+- Keep `github.com/siderolabs/omni/client` as the Omni integration boundary.
+- Do not import `github.com/siderolabs/omni/client/pkg/template/internal/models`;
+  Go's `internal` package rule makes that unavailable to downstream modules.
+- Prefer rendering Omni cluster-template YAML and delegating validation, sync,
+  delete, and status behavior to `pkg/template/operations`.
+- Keep child template resources bound to `OmniCluster.spec.clusterRef`.
+  `OmniCluster` owns the `OmniConnection` selection.
+- Keep the live Omni fixture opt-in. `mise run omni-up` installs a real Omni
+  fixture into the current Kubernetes context, accepts the local-test EULA
+  values, and writes credentials under `.local/`.
+- Keep secrets out of samples except obvious placeholders.
+
+## Generated Files
+
+Do not hand-edit generated files unless you are changing generation itself:
+
+- `api/*/zz_generated.deepcopy.go`
+- `config/crd/bases/*.yaml`
+- `config/rbac/role.yaml`
+
+After changing API types or Kubebuilder markers, regenerate manifests and code:
+
+```sh
+mise run manifests
+mise run generate
+```
+
+If chart CRD packaging is affected, also sync chart CRDs:
+
+```sh
+mise run chart-sync-crds
+```
+
+## Testing
+
+Use the fast loop while iterating:
+
+```sh
+mise run test-unit
+```
+
+Before opening or updating a pull request, run the full local verification set
+that matches CI coverage:
+
+```sh
+mise run test
+mise run lint
+mise run build
+mise run samples
+mise run render-default
+mise run chart-lint
+mise run chart-template
+mise run docs-build
+```
+
+Optional real-Omni transport smoke tests stay explicit:
+
+```sh
+mise run omni-template
+mise run test-live-omni
+```
+
+## Documentation
+
+Contributor workflow details live in
+[`docs/guides/local-development.md`](docs/guides/local-development.md). The
+real-Omni fixture is documented in
+[`docs/local-omni-fixture.md`](docs/local-omni-fixture.md).
+
+Build the documentation site before changing docs:
+
+```sh
+mise run docs-build
+```
+
+Serve it locally when reviewing rendered pages:
+
+```sh
+mise run docs-serve
+```
+
+## Releases
+
+Published artifact versions come from root `version.json` through NBGV. The
+publish workflow runs from `master` and pushes both the operator image and OCI
+Helm charts to GHCR.
+
+Use the pinned NBGV tool directly through the existing tasks and workflows.
+Do not add a repo-local wrapper around `nbgv`.
