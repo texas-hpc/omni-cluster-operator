@@ -1,0 +1,70 @@
+name: Feature request
+description: Propose a new capability or behavior change for omni-cluster-operator.
+title: "feat: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for new CRD fields, controller behavior, Helm chart changes, documentation improvements, and integration requests.
+
+        Do not include real Omni service account keys, kubeconfigs, tokens, or other secrets.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight checks
+      options:
+        - label: I searched existing issues for a duplicate.
+          required: true
+        - label: This request is about omni-cluster-operator rather than upstream Omni, Talos, or Kubernetes behavior.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow or limitation should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the behavior, API shape, chart option, or documentation change you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CRDs and API
+        - Controller reconciliation
+        - Omni template rendering
+        - Helm chart and install
+        - Webhooks and validation
+        - Documentation
+        - Tests and developer workflow
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any workarounds or other approaches you considered.
+    validations:
+      required: false
+  - type: textarea
+    id: example
+    attributes:
+      label: Example configuration
+      description: If relevant, show the desired manifest, Helm values, or command shape.
+      render: yaml
+    validations:
+      required: false
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add links, screenshots, or implementation notes that clarify the request.
+    validations:
+      required: false

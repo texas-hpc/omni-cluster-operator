@@ -6,7 +6,23 @@ templates from Kubernetes custom resources.
 
 ## Development Setup
 
-Install the pinned toolchain with `mise`:
+This project requires [`mise`](https://mise.jdx.dev/) for toolchain management
+and project automation. Install it before running repository tasks. Common
+installation options include:
+
+```sh
+# macOS, via Homebrew
+brew install mise
+
+# Linux/macOS, via the mise installer
+curl https://mise.run | sh
+```
+
+See the official
+[`mise` installation guide](https://mise.jdx.dev/installing-mise.html) for
+other package managers and shell activation steps.
+
+After installing `mise`, install the pinned project toolchain:
 
 ```sh
 mise trust
@@ -91,6 +107,28 @@ Optional real-Omni transport smoke tests stay explicit:
 mise run omni-template
 mise run test-live-omni
 ```
+
+## GitHub Collaborator Access
+
+This repository expects contributors who raise pull requests or make sustained
+project changes to be GitHub collaborators on the repository. Collaborator
+access keeps pull request authorship, CI access, review requests, branch
+permissions, and follow-up maintenance in the same GitHub security boundary.
+
+If you are not already a collaborator, request access before starting a change
+that you expect to submit upstream:
+
+1. Open a GitHub issue describing the change you want to make, why it belongs in
+   this repository, and any operator, Omni, Kubernetes, or documentation context
+   you already have.
+2. Ask a current maintainer to sponsor collaborator access in that issue.
+3. Wait for a maintainer to confirm the contribution scope and send a GitHub
+   repository invitation.
+4. Accept the invitation, then create your branch and pull request from the
+   repository using the normal verification steps above.
+
+Small reports, questions, and issue comments do not require collaborator access,
+but pull requests and ongoing contribution work do.
 
 ## Documentation
 

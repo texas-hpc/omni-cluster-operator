@@ -10,6 +10,7 @@ require (
 	github.com/siderolabs/omni/client v1.8.1
 	go.yaml.in/yaml/v4 v4.0.0-rc.4
 	helm.sh/helm/v3 v3.21.0
+	helm.sh/helm/v4 v4.2.0
 	k8s.io/api v0.36.1
 	k8s.io/apiextensions-apiserver v0.36.1
 	k8s.io/apimachinery v0.36.1
