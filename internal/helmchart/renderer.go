@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/chart/loader"
@@ -43,6 +44,8 @@ type Renderer struct {
 	CacheDir string
 }
 
+var locateChartMu sync.Mutex
+
 // Render renders a chart to raw multi-document YAML.
 func (r Renderer) Render(ctx context.Context, spec Spec) ([]byte, error) {
 	settings, err := r.Settings()
@@ -51,6 +54,10 @@ func (r Renderer) Render(ctx context.Context, spec Spec) ([]byte, error) {
 	}
 
 	cfg := action.NewConfiguration()
+	if err := cfg.Init(settings.RESTClientGetter(), spec.Namespace, "memory"); err != nil {
+		return nil, fmt.Errorf("initialize Helm action configuration: %w", err)
+	}
+
 	client := action.NewInstall(cfg)
 	client.RepoURL = spec.Repository
 	client.Version = spec.Version
@@ -60,7 +67,9 @@ func (r Renderer) Render(ctx context.Context, spec Spec) ([]byte, error) {
 	client.Replace = true
 	client.IncludeCRDs = true
 
+	locateChartMu.Lock()
 	chartPath, err := client.LocateChart(spec.Chart, settings)
+	locateChartMu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("locate Helm chart %s %s from %s: %w", spec.Chart, spec.Version, spec.Repository, err)
 	}
