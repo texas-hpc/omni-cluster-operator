@@ -6,7 +6,23 @@ templates from Kubernetes custom resources.
 
 ## Development Setup
 
-Install the pinned toolchain with `mise`:
+This project requires [`mise`](https://mise.jdx.dev/) for toolchain management
+and project automation. Install it before running repository tasks. Common
+installation options include:
+
+```sh
+# macOS, via Homebrew
+brew install mise
+
+# Linux/macOS, via the mise installer
+curl https://mise.run | sh
+```
+
+See the official
+[`mise` installation guide](https://mise.jdx.dev/installing-mise.html) for
+other package managers and shell activation steps.
+
+After installing `mise`, install the pinned project toolchain:
 
 ```sh
 mise trust
