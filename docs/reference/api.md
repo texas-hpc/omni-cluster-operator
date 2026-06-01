@@ -85,9 +85,27 @@ Defines optional per-machine settings for a static machine.
 | `spec.systemExtensions` | No | Machine-specific system extensions. |
 | `spec.kernelArgs` | No | Machine-specific kernel args. |
 
+## OmniClusterAddon
+
+Defines a generic Helm-rendered manifest for one `OmniCluster`.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `spec.clusterRef.name` | Yes | `OmniCluster` in the same namespace. |
+| `spec.manifestName` | No | Omni manifest sync entry name. Defaults to `metadata.name`. |
+| `spec.mode` | No | Omni manifest apply mode, `full` or `one-time`. Defaults to `full`. |
+| `spec.helm.repository` | Yes | Helm repository URL. |
+| `spec.helm.chart` | Yes | Helm chart name to render. |
+| `spec.helm.version` | Yes | Helm chart version to render. |
+| `spec.helm.releaseName` | No | Helm release name used while rendering. Defaults to `metadata.name`. |
+| `spec.helm.namespace` | No | Namespace for rendered objects. Defaults to `default`. |
+| `spec.helm.values` | No | Helm values object passed to the renderer. |
+
+Status includes rendered manifest Secret name, rendered manifest hash, manifest name, chart, chart version, and last render time.
+
 ## OmniCilium
 
-Defines an optional Cilium install for one `OmniCluster`.
+Defines a legacy Cilium install for one `OmniCluster`. New Cilium manifests should prefer `OmniClusterAddon` plus explicit Talos patches on `OmniCluster`.
 
 | Field | Required | Notes |
 | --- | --- | --- |

@@ -17,21 +17,16 @@ limitations under the License.
 package cilium
 
 import (
-	"bufio"
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	sigsyaml "sigs.k8s.io/yaml"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+	"github.com/texas-hpc/omni-cluster-operator/internal/renderedmanifest"
 )
 
 const (
@@ -41,8 +36,8 @@ const (
 	DefaultNamespace             = "kube-system"
 	DefaultManifestName          = "cilium"
 	DefaultMode                  = "full"
-	RenderedManifestSecretKey    = "manifest.yaml"
-	RenderedManifestHashKey      = "omni.texashpc.com/rendered-manifest-hash"
+	RenderedManifestSecretKey    = renderedmanifest.SecretKey
+	RenderedManifestHashKey      = renderedmanifest.HashAnnotation
 	RenderedManifestSpecHashKey  = "omni.texashpc.com/cilium-spec-hash"
 	RenderedManifestOwnerLabel   = "omni.texashpc.com/omnicilium"
 	RenderedManifestClusterLabel = "omni.texashpc.com/cluster"
@@ -113,8 +108,7 @@ func RenderedManifestLabels(install *omniv1alpha1.OmniCilium) map[string]string 
 
 // RenderedManifestHash returns a SHA-256 hash for rendered manifest bytes.
 func RenderedManifestHash(manifest []byte) string {
-	sum := sha256.Sum256(manifest)
-	return hex.EncodeToString(sum[:])
+	return renderedmanifest.Hash(manifest)
 }
 
 // SpecHash returns a stable hash of Cilium inputs that affect rendered output.
@@ -149,8 +143,7 @@ func SpecHash(install *omniv1alpha1.OmniCilium) (string, error) {
 		return "", fmt.Errorf("marshal cilium spec hash payload: %w", err)
 	}
 
-	sum := sha256.Sum256(payload)
-	return hex.EncodeToString(sum[:]), nil
+	return renderedmanifest.Hash(payload), nil
 }
 
 // Values returns Talos-compatible Cilium Helm values merged with user overrides.
@@ -176,56 +169,12 @@ func Values(install *omniv1alpha1.OmniCilium) (map[string]any, bool, error) {
 
 // ParseRenderedManifest converts a rendered multi-document YAML manifest into Omni inline JSON objects.
 func ParseRenderedManifest(manifest []byte) ([]apiextensionsv1.JSON, error) {
-	reader := yaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(manifest)))
-	var objects []apiextensionsv1.JSON
-
-	for {
-		doc, err := reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return nil, fmt.Errorf("read manifest document: %w", err)
-		}
-
-		if len(bytes.TrimSpace(doc)) == 0 {
-			continue
-		}
-
-		rawJSON, err := sigsyaml.YAMLToJSON(doc)
-		if err != nil {
-			return nil, fmt.Errorf("convert manifest document to JSON: %w", err)
-		}
-		if string(bytes.TrimSpace(rawJSON)) == "null" {
-			continue
-		}
-
-		var compact bytes.Buffer
-		if err := json.Compact(&compact, rawJSON); err != nil {
-			return nil, fmt.Errorf("compact manifest document JSON: %w", err)
-		}
-		if compact.Len() == 0 || compact.String() == "{}" {
-			continue
-		}
-
-		objects = append(objects, apiextensionsv1.JSON{Raw: compact.Bytes()})
-	}
-
-	if len(objects) == 0 {
-		return nil, fmt.Errorf("rendered manifest contains no Kubernetes objects")
-	}
-
-	return objects, nil
+	return renderedmanifest.Parse(manifest)
 }
 
 // SecretHasCurrentManifest reports whether a Secret already contains the desired render.
 func SecretHasCurrentManifest(secret client.Object, data map[string][]byte, specHash string) bool {
-	if secret.GetAnnotations()[RenderedManifestSpecHashKey] != specHash {
-		return false
-	}
-
-	return len(data[RenderedManifestSecretKey]) > 0
+	return renderedmanifest.SecretHasCurrentManifest(secret, data, RenderedManifestSpecHashKey, specHash)
 }
 
 func talosDefaultValues() map[string]any {

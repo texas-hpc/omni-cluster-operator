@@ -163,6 +163,57 @@ func TestConnectionWarnings(t *testing.T) {
 	}
 }
 
+func TestOmniClusterAddonValidation(t *testing.T) {
+	t.Parallel()
+
+	validator := &OmniClusterAddonCustomValidator{}
+	item := validAddon()
+
+	_, err := validator.ValidateCreate(context.Background(), item)
+	if err != nil {
+		t.Fatalf("ValidateCreate() error = %v, want nil", err)
+	}
+
+	item.Spec.Helm.Repository = " "
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "helm.repository is required")
+
+	item = validAddon()
+	item.Spec.Helm.Repository = "not a url"
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "helm.repository must be an absolute URL")
+
+	item = validAddon()
+	item.Spec.Helm.Chart = " "
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "helm.chart is required")
+
+	item = validAddon()
+	item.Spec.Helm.Version = " "
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "helm.version is required")
+
+	item = validAddon()
+	item.Spec.Helm.Values = &apiextensionsv1.JSON{Raw: []byte(`[]`)}
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "addon values must be a JSON object")
+
+	item = validAddon()
+	item.Spec.Helm.Values = &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount": 2}`)}
+	_, err = validator.ValidateUpdate(context.Background(), validAddon(), item)
+	if err != nil {
+		t.Fatalf("ValidateUpdate() error = %v, want nil", err)
+	}
+
+	warnings, err := validator.ValidateDelete(context.Background(), item)
+	if err != nil {
+		t.Fatalf("ValidateDelete() error = %v, want nil", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("ValidateDelete() warnings = %#v, want none", warnings)
+	}
+}
+
 func TestOmniCiliumValidation(t *testing.T) {
 	t.Parallel()
 
@@ -221,6 +272,24 @@ func validCluster() *omniv1alpha1.OmniCluster {
 			Patches: []omniv1alpha1.Patch{{
 				Inline: &apiextensionsv1.JSON{Raw: []byte(`{"machine": {}}`)},
 			}},
+		},
+	}
+}
+
+func validAddon() *omniv1alpha1.OmniClusterAddon {
+	return &omniv1alpha1.OmniClusterAddon{
+		ObjectMeta: metav1.ObjectMeta{Name: "metrics"},
+		Spec: omniv1alpha1.OmniClusterAddonSpec{
+			ClusterRef:   omniv1alpha1.OmniClusterRef{Name: validationClusterName},
+			ManifestName: "metrics",
+			Helm: omniv1alpha1.OmniClusterAddonHelmSpec{
+				Repository:  "https://charts.example.test/",
+				Chart:       "metrics-server",
+				Version:     "3.13.0",
+				ReleaseName: "metrics-server",
+				Namespace:   "kube-system",
+				Values:      &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount": 1}`)},
+			},
 		},
 	}
 }

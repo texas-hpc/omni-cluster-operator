@@ -20,6 +20,15 @@ spec:
           name: apps
   talos:
     version: v1.13.2
+  patches:
+  - name: disable-default-cni-for-cilium
+    inline:
+      cluster:
+        network:
+          cni:
+            name: none
+        proxy:
+          disabled: true
   features:
     enableWorkloadProxy: true
   syncInterval: 5m

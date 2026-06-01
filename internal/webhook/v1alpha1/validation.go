@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+	"github.com/texas-hpc/omni-cluster-operator/internal/addon"
 	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 )
 
@@ -97,6 +98,29 @@ func validateMachine(machine *omniv1alpha1.OmniMachine) field.ErrorList {
 	return allErrs
 }
 
+func validateAddon(item *omniv1alpha1.OmniClusterAddon) field.ErrorList {
+	specPath := field.NewPath("spec")
+	helmPath := specPath.Child("helm")
+	var allErrs field.ErrorList
+
+	if strings.TrimSpace(item.Spec.Helm.Repository) == "" {
+		allErrs = append(allErrs, field.Required(helmPath.Child("repository"), "helm.repository is required"))
+	} else if !isAbsoluteURL(item.Spec.Helm.Repository) {
+		allErrs = append(allErrs, field.Invalid(helmPath.Child("repository"), item.Spec.Helm.Repository, "helm.repository must be an absolute URL"))
+	}
+	if strings.TrimSpace(item.Spec.Helm.Chart) == "" {
+		allErrs = append(allErrs, field.Required(helmPath.Child("chart"), "helm.chart is required"))
+	}
+	if strings.TrimSpace(item.Spec.Helm.Version) == "" {
+		allErrs = append(allErrs, field.Required(helmPath.Child("version"), "helm.version is required"))
+	}
+	if _, err := addon.Values(item); err != nil {
+		allErrs = append(allErrs, field.Invalid(helmPath.Child("values"), item.Spec.Helm.Values, err.Error()))
+	}
+
+	return allErrs
+}
+
 func validateCilium(install *omniv1alpha1.OmniCilium) field.ErrorList {
 	specPath := field.NewPath("spec")
 	var allErrs field.ErrorList
@@ -104,11 +128,8 @@ func validateCilium(install *omniv1alpha1.OmniCilium) field.ErrorList {
 	if strings.TrimSpace(install.Spec.ChartVersion) == "" {
 		allErrs = append(allErrs, field.Required(specPath.Child("chartVersion"), "chartVersion is required"))
 	}
-	if install.Spec.ChartRepository != "" {
-		parsed, err := url.Parse(install.Spec.ChartRepository)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			allErrs = append(allErrs, field.Invalid(specPath.Child("chartRepository"), install.Spec.ChartRepository, "chartRepository must be an absolute URL"))
-		}
+	if install.Spec.ChartRepository != "" && !isAbsoluteURL(install.Spec.ChartRepository) {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("chartRepository"), install.Spec.ChartRepository, "chartRepository must be an absolute URL"))
 	}
 	if _, _, err := cilium.Values(install); err != nil {
 		allErrs = append(allErrs, field.Invalid(specPath.Child("values"), install.Spec.Values, err.Error()))
@@ -137,6 +158,11 @@ func connectionWarnings(connection *omniv1alpha1.OmniConnection) []string {
 	}
 
 	return []string{"insecureSkipTLSVerify disables Omni endpoint TLS certificate verification"}
+}
+
+func isAbsoluteURL(value string) bool {
+	parsed, err := url.Parse(value)
+	return err == nil && parsed.Scheme != "" && parsed.Host != ""
 }
 
 func validateMachineSet(specPath *field.Path, spec omniv1alpha1.MachineSetSpecFields) field.ErrorList {
