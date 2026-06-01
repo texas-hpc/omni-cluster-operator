@@ -24,6 +24,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -362,11 +363,17 @@ func TestOmniClusterDeleteRemovesLegacyFinalizer(t *testing.T) {
 		t.Fatalf("deleteCalls = %#v, want [edge]", omni.deleteCalls)
 	}
 
-	// Verify the legacy finalizer was removed
+	// Verify the cluster object is deleted (or finalizer was removed)
 	updated := &omniv1alpha1.OmniCluster{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+	err := k8sClient.Get(ctx, request.NamespacedName, updated)
+	if apierrors.IsNotFound(err) {
+		// Expected: object was deleted when last finalizer was removed
+		return
+	}
+	if err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
+	// If object still exists, verify finalizers are empty
 	if len(updated.Finalizers) != 0 {
 		t.Fatalf("finalizers = %#v, want empty (legacy finalizer should be removed)", updated.Finalizers)
 	}
@@ -396,11 +403,22 @@ func TestOmniClusterDeleteRemovesBothFinalizers(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
-	// Verify both finalizers were removed
+	// Verify the cluster was deleted from Omni
+	if len(omni.deleteCalls) != 1 || omni.deleteCalls[0] != testClusterName {
+		t.Fatalf("deleteCalls = %#v, want [edge]", omni.deleteCalls)
+	}
+
+	// Verify the cluster object is deleted (or finalizers were removed)
 	updated := &omniv1alpha1.OmniCluster{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+	err := k8sClient.Get(ctx, request.NamespacedName, updated)
+	if apierrors.IsNotFound(err) {
+		// Expected: object was deleted when last finalizer was removed
+		return
+	}
+	if err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
+	// If object still exists, verify finalizers are empty
 	if len(updated.Finalizers) != 0 {
 		t.Fatalf("finalizers = %#v, want empty (both finalizers should be removed)", updated.Finalizers)
 	}
