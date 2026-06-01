@@ -1,0 +1,79 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.description" . }}
+
+This chart installs the `omni-cluster-operator` controller manager, webhook
+configuration, RBAC, services, and optional cert-manager certificate resources.
+
+`omni-cluster-operator` is an independent community project for managing Sidero
+Omni cluster templates from Kubernetes. It is not affiliated with, sponsored by,
+endorsed by, or maintained by Sidero Labs.
+
+## Installation
+
+Prerequisites:
+
+- Kubernetes cluster where the operator will run
+- Helm 3
+- cert-manager installed in the cluster when `webhook.enabled` and
+  `certManager.enabled` are left at their defaults
+- The `omni-cluster-operator-crds` chart installed first
+- Access to an Omni instance and an Omni service account key
+
+Install the CRDs first:
+
+```sh
+helm install omni-cluster-operator-crds \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator-crds
+```
+
+Then install the operator:
+
+```sh
+helm install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --namespace omni-cluster-operator-system \
+  --create-namespace
+```
+
+To pin a specific release, use matching versions for both charts:
+
+```sh
+helm install omni-cluster-operator \
+  oci://ghcr.io/texas-hpc/charts/omni-cluster-operator \
+  --namespace omni-cluster-operator-system \
+  --create-namespace \
+  --version <chart-version>
+```
+
+## Omni Credentials
+
+Create the Omni service account Secret in the operator release namespace. The
+service account key can come from the Omni UI or `omnictl serviceaccount
+create`. Do not commit real service account keys to Git.
+
+```sh
+kubectl create secret generic omni-service-account \
+  --namespace omni-cluster-operator-system \
+  --from-literal=serviceAccountKey='<omni service account key>'
+```
+
+Reference that Secret from an `OmniConnection` resource in the same namespace as
+the operator release.
+
+## Scope
+
+The operator runs in namespaced mode and watches the namespace where the chart is
+installed. Create `OmniConnection`, `OmniCluster`, and child resources in the
+operator release namespace.
+
+{{ template "chart.valuesSection" . }}
+
+## Documentation
+
+- [Project documentation](https://texas-hpc.github.io/omni-cluster-operator/)
+- [Installation](https://texas-hpc.github.io/omni-cluster-operator/getting-started/installation/)
+- [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
+- [Source repository](https://github.com/texas-hpc/omni-cluster-operator)
+
+{{ template "helm-docs.versionFooter" . }}

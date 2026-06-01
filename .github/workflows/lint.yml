@@ -61,6 +61,7 @@ jobs:
           APP_VERSION: 0.0.0-ci
           IMAGE_TAG: 0.0.0-ci
         run: |
+          mise run chart-docs-check
           mise run chart-lint
           mise run chart-template >/dev/null
           mise run chart-package

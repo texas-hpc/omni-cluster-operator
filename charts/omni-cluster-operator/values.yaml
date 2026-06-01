@@ -1,60 +1,89 @@
+# -- Overrides the chart name used in generated resource names.
 nameOverride: ""
+# -- Overrides the full generated release name.
 fullnameOverride: ""
 
 namespace:
+  # -- Creates the release namespace as a chart resource.
   create: false
 
 image:
+  # -- Operator image repository.
   repository: ghcr.io/texas-hpc/omni-cluster-operator
+  # -- Operator image tag. Defaults to the chart app version when empty.
   tag: ""
+  # -- Kubernetes image pull policy for the manager container.
   pullPolicy: IfNotPresent
 
+# -- Image pull secrets attached to the manager Pod.
 imagePullSecrets: []
 
+# -- Number of manager replicas.
 replicaCount: 1
 
 leaderElection:
+  # -- Enables controller-runtime leader election.
   enabled: true
 
 metrics:
+  # -- Exposes the controller metrics service.
   enabled: true
+  # -- Serves metrics over HTTPS.
   secure: true
+  # -- Metrics container and service port.
   port: 8443
   service:
+    # -- Extra annotations for the metrics Service.
     annotations: {}
+    # -- Extra labels for the metrics Service.
     labels: {}
   rbac:
+    # -- Creates metrics authentication and reader RBAC.
     enabled: true
 
 webhook:
+  # -- Creates and serves validating webhooks.
   enabled: true
+  # -- Webhook container port.
   port: 9443
+  # -- Failure policy for validating webhook calls.
   failurePolicy: Fail
+  # -- Directory where webhook serving certificates are mounted.
   certDir: /tmp/k8s-webhook-server/serving-certs
 
 certManager:
+  # -- Creates cert-manager Issuer and Certificate resources and injects the webhook CA bundle.
   enabled: true
 
 rbac:
+  # -- Creates the manager, leader election, and metrics RBAC resources.
   create: true
   helperRoles:
+    # -- Creates admin, editor, and viewer helper ClusterRoles for the custom resources.
     create: true
 
 serviceAccount:
+  # -- Creates the manager ServiceAccount.
   create: true
+  # -- Extra annotations for the manager ServiceAccount.
   annotations: {}
+  # -- Existing ServiceAccount name to use when serviceAccount.create is false.
   name: ""
 
+# -- Annotations applied to the manager Pod.
 podAnnotations:
   kubectl.kubernetes.io/default-container: manager
 
+# -- Extra labels applied to the manager Pod.
 podLabels: {}
 
+# -- Pod-level security context.
 podSecurityContext:
   runAsNonRoot: true
   seccompProfile:
     type: RuntimeDefault
 
+# -- Container-level security context.
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
@@ -62,6 +91,7 @@ securityContext:
       - ALL
   readOnlyRootFilesystem: true
 
+# -- Manager container resource requests and limits.
 resources:
   limits:
     cpu: 500m
@@ -70,23 +100,37 @@ resources:
     cpu: 10m
     memory: 64Mi
 
+# -- Node selector for the manager Pod.
 nodeSelector: {}
+# -- Tolerations for the manager Pod.
 tolerations: []
+# -- Affinity rules for the manager Pod.
 affinity: {}
 
 healthProbe:
+  # -- Manager health probe bind address.
   bindAddress: :8081
+  # -- Health and readiness probe port.
   port: 8081
   liveness:
+    # -- Liveness probe initial delay.
     initialDelaySeconds: 15
+    # -- Liveness probe interval.
     periodSeconds: 20
   readiness:
+    # -- Readiness probe initial delay.
     initialDelaySeconds: 5
+    # -- Readiness probe interval.
     periodSeconds: 10
 
+# -- Extra command-line arguments passed to the manager.
 extraArgs: []
+# -- Extra environment variables added to the manager container.
 extraEnv: []
+# -- Extra volumes added to the manager Pod.
 extraVolumes: []
+# -- Extra volume mounts added to the manager container.
 extraVolumeMounts: []
 
+# -- Manager Pod termination grace period.
 terminationGracePeriodSeconds: 10
