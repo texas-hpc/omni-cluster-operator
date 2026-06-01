@@ -208,6 +208,7 @@ metadata:
 			Labels:    cilium.RenderedManifestLabels(install),
 			Annotations: map[string]string{
 				cilium.RenderedManifestSpecHashKey: specHash,
+				cilium.RenderedManifestHashKey:     cilium.RenderedManifestHash(manifest),
 			},
 		},
 		Data: map[string][]byte{
@@ -1361,6 +1362,7 @@ func currentAddonSecret(t *testing.T, item *omniv1alpha1.OmniClusterAddon, manif
 			Labels:    addon.RenderedManifestLabels(item),
 			Annotations: map[string]string{
 				addon.RenderedManifestSpecHashKey: specHash,
+				addon.RenderedManifestHashKey:     addon.RenderedManifestHash(manifest),
 			},
 		},
 		Data: map[string][]byte{
