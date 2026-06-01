@@ -22,9 +22,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/loader"
+	"helm.sh/helm/v4/pkg/cli"
+	helmrelease "helm.sh/helm/v4/pkg/release"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 )
@@ -46,18 +47,14 @@ func (r HelmRenderer) Render(ctx context.Context, install *omniv1alpha1.OmniCili
 		return nil, false, err
 	}
 
-	cfg := &action.Configuration{
-		Log: func(string, ...any) {},
-	}
+	cfg := action.NewConfiguration()
 	client := action.NewInstall(cfg)
 	client.RepoURL = ChartRepository(install)
 	client.Version = install.Spec.ChartVersion
 	client.ReleaseName = ReleaseName(install)
 	client.Namespace = Namespace(install)
-	client.DryRun = true
-	client.DryRunOption = "client"
+	client.DryRunStrategy = action.DryRunClient
 	client.Replace = true
-	client.ClientOnly = true
 	client.IncludeCRDs = true
 
 	chartPath, err := client.LocateChart(ChartName, settings)
@@ -74,11 +71,16 @@ func (r HelmRenderer) Render(ctx context.Context, install *omniv1alpha1.OmniCili
 	if err != nil {
 		return nil, false, fmt.Errorf("render Cilium chart: %w", err)
 	}
-	if release == nil || release.Manifest == "" {
+	accessor, err := helmrelease.NewAccessor(release)
+	if err != nil {
+		return nil, false, fmt.Errorf("render Cilium chart: read release: %w", err)
+	}
+	manifest := accessor.Manifest()
+	if manifest == "" {
 		return nil, false, fmt.Errorf("render Cilium chart: rendered manifest is empty")
 	}
 
-	return []byte(release.Manifest), kubeProxyReplacement, nil
+	return []byte(manifest), kubeProxyReplacement, nil
 }
 
 func (r HelmRenderer) settings() (*cli.EnvSettings, error) {
