@@ -102,7 +102,7 @@ func (r *OmniClusterAddonReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, statusErr
 		}
 
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, renderErr
 	}
 	if _, parseErr := addon.ParseRenderedManifest(manifest); parseErr != nil {
 		renderErr = fmt.Errorf("rendered manifest is invalid: %w", parseErr)

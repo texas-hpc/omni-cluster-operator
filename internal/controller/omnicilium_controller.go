@@ -103,7 +103,7 @@ func (r *OmniCiliumReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{}, statusErr
 		}
 
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, renderErr
 	}
 	if _, parseErr := cilium.ParseRenderedManifest(manifest); parseErr != nil {
 		renderErr = fmt.Errorf("rendered manifest is invalid: %w", parseErr)

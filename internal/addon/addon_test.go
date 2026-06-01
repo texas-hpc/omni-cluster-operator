@@ -155,6 +155,18 @@ metadata:
 	}
 }
 
+func TestParseRenderedManifestAllowsEmptyDocuments(t *testing.T) {
+	t.Parallel()
+
+	objects, err := ParseRenderedManifest(nil)
+	if err != nil {
+		t.Fatalf("ParseRenderedManifest() error = %v", err)
+	}
+	if len(objects) != 0 {
+		t.Fatalf("ParseRenderedManifest() returned %d objects, want 0", len(objects))
+	}
+}
+
 func TestSecretHasCurrentManifest(t *testing.T) {
 	t.Parallel()
 
@@ -176,6 +188,18 @@ func TestSecretHasCurrentManifest(t *testing.T) {
 	}
 	if !SecretHasCurrentManifest(secret, map[string][]byte{RenderedManifestSecretKey: manifest}, "current") {
 		t.Fatal("SecretHasCurrentManifest() = false for current manifest")
+	}
+
+	emptyManifestSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				RenderedManifestSpecHashKey: "current",
+				RenderedManifestHashKey:     RenderedManifestHash(nil),
+			},
+		},
+	}
+	if !SecretHasCurrentManifest(emptyManifestSecret, map[string][]byte{RenderedManifestSecretKey: nil}, "current") {
+		t.Fatal("SecretHasCurrentManifest() = false for current empty manifest")
 	}
 }
 

@@ -147,7 +147,7 @@ type backupConfigDoc struct {
 type manifestDoc struct {
 	Name   string `yaml:"name"`
 	Mode   string `yaml:"mode"`
-	Inline []any  `yaml:"inline,omitempty"`
+	Inline *[]any `yaml:"inline,omitempty"`
 	File   string `yaml:"file,omitempty"`
 }
 
@@ -489,12 +489,22 @@ func renderManifests(manifests []omniv1alpha1.KubernetesManifest) []manifestDoc 
 		rendered = append(rendered, manifestDoc{
 			Name:   manifest.Name,
 			Mode:   manifest.Mode,
-			Inline: renderJSONList(manifest.Inline),
+			Inline: renderManifestInline(manifest),
 			File:   manifest.File,
 		})
 	}
 
 	return rendered
+}
+
+func renderManifestInline(manifest omniv1alpha1.KubernetesManifest) *[]any {
+	if manifest.File != "" {
+		return nil
+	}
+
+	inline := renderJSONList(manifest.Inline)
+
+	return &inline
 }
 
 func renderPatches(patches []omniv1alpha1.Patch) []patchDoc {
@@ -594,7 +604,7 @@ func intOrStringValue(value intstr.IntOrString) any {
 
 func renderJSONList(values []apiextensionsv1.JSON) []any {
 	if len(values) == 0 {
-		return nil
+		return []any{}
 	}
 
 	rendered := make([]any, 0, len(values))

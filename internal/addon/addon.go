@@ -138,7 +138,7 @@ func Values(item *omniv1alpha1.OmniClusterAddon) (map[string]any, error) {
 
 // ParseRenderedManifest converts a rendered multi-document YAML manifest into Omni inline JSON objects.
 func ParseRenderedManifest(manifest []byte) ([]apiextensionsv1.JSON, error) {
-	return renderedmanifest.Parse(manifest)
+	return renderedmanifest.Parse(manifest, renderedmanifest.AllowEmpty)
 }
 
 // SecretHasCurrentManifest reports whether a Secret already contains the desired render.

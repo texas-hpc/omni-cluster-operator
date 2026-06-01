@@ -296,7 +296,7 @@ metadata:
 
 	rendered := string(omni.syncedTemplate)
 	for _, want := range []string{
-		"name: gateway",
+		"\n    - name: gateway\n",
 		"name: metrics",
 		"kind: Namespace",
 		"gateway-system",
@@ -311,6 +311,49 @@ metadata:
 		t.Fatalf("get cluster: %v", err)
 	}
 	if got, want := strings.Join(cluster.Status.AddonRefs, ","), testGatewayName+",metrics-addon"; got != want {
+		t.Fatalf("AddonRefs = %q, want %q", got, want)
+	}
+}
+
+func TestOmniClusterIncludesEmptyRenderedAddonManifest(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	omni := &fakeOmni{}
+	item := testAddon()
+	secret := currentAddonSecret(t, item, nil)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniClusterAddon{}).
+		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), item, secret).
+		Build()
+
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	rendered := string(omni.syncedTemplate)
+	for _, want := range []string{
+		"name: metrics",
+		"inline: []",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("synced template missing %q:\n%s", want, rendered)
+		}
+	}
+
+	cluster := &omniv1alpha1.OmniCluster{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
+		t.Fatalf("get cluster: %v", err)
+	}
+	if got, want := strings.Join(cluster.Status.AddonRefs, ","), "metrics-addon"; got != want {
 		t.Fatalf("AddonRefs = %q, want %q", got, want)
 	}
 }
@@ -901,6 +944,58 @@ metadata:
 	}
 }
 
+func TestOmniClusterAddonCachesEmptyRenderedManifest(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	renderer := &fakeAddonRenderer{manifest: []byte{}}
+	item := testAddon()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniClusterAddon{}).
+		WithObjects(testCluster(), item).
+		Build()
+
+	reconciler := &OmniClusterAddonReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	if renderer.calls != 1 {
+		t.Fatalf("renderer calls = %d, want 1", renderer.calls)
+	}
+
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{Namespace: testNamespace, Name: addon.RenderedManifestSecretName(item)}
+	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
+		t.Fatalf("get rendered manifest secret: %v", err)
+	}
+	manifest, ok := secret.Data[addon.RenderedManifestSecretKey]
+	if !ok {
+		t.Fatal("rendered manifest key is missing")
+	}
+	if len(manifest) != 0 {
+		t.Fatalf("rendered manifest length = %d, want 0", len(manifest))
+	}
+	if got, want := secret.Annotations[addon.RenderedManifestHashKey], addon.RenderedManifestHash(nil); got != want {
+		t.Fatalf("rendered manifest hash = %q, want %q", got, want)
+	}
+
+	updated := &omniv1alpha1.OmniClusterAddon{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get addon: %v", err)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Ready condition = %#v, want True", got)
+	}
+}
+
 func TestOmniClusterAddonRenderFailureMarksReadyFalse(t *testing.T) {
 	t.Parallel()
 
@@ -917,8 +1012,8 @@ func TestOmniClusterAddonRenderFailureMarksReadyFalse(t *testing.T) {
 	reconciler := &OmniClusterAddonReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
 
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
+	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "chart unavailable") {
+		t.Fatalf("Reconcile() error = %v, want chart unavailable", err)
 	}
 
 	updated := &omniv1alpha1.OmniClusterAddon{}
@@ -946,8 +1041,8 @@ func TestOmniCiliumRenderFailureMarksReadyFalse(t *testing.T) {
 	reconciler := &OmniCiliumReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: install.Name}}
 
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("Reconcile() error = %v", err)
+	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "chart unavailable") {
+		t.Fatalf("Reconcile() error = %v, want chart unavailable", err)
 	}
 
 	updated := &omniv1alpha1.OmniCilium{}
