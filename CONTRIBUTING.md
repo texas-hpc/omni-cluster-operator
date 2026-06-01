@@ -157,3 +157,38 @@ Helm charts to GHCR.
 
 Use the pinned NBGV tool directly through the existing tasks and workflows.
 Do not add a repo-local wrapper around `nbgv`.
+
+### Version bumps are contributor responsibility
+
+If your change is user-facing, compatibility-affecting, or release-shaping, you
+are responsible for deciding whether `version.json` must move to a new minor or
+major version before the pull request merges.
+
+This is not optional for big changes. A pull request with breaking behavior,
+incompatible API/schema changes, or a release-line-worthy feature is not ready
+to merge until the version bump is included or the maintainer explicitly decides
+that the current release line is still correct.
+
+Do not leave this for the publish workflow to infer. NBGV can count artifact
+commits, but it cannot know whether an API change is breaking, whether a chart
+behavior change deserves a minor release, or whether stored Kubernetes resources
+need a major-version warning. That judgment belongs in the pull request.
+
+Bump the base `version` in `version.json` when the current release line is no
+longer appropriate:
+
+- Use a minor bump for new CRDs, new fields, new chart capabilities, meaningful
+  behavior changes, or non-breaking operator features users should notice.
+- Use a major bump for breaking API changes, incompatible CRD/schema changes,
+  disruptive chart/RBAC changes, migration requirements, or behavior changes
+  that can surprise existing installations.
+- Keep patch-level artifact versions on the current line for small compatible
+  fixes. NBGV will produce patch movement from filtered artifact commits.
+
+When changing the base version, keep `versionHeightOffsetAppliesTo` aligned with
+the new base version so the first clean `master` release on that line starts at
+`.0`.
+
+Update [`CHANGELOG.md`](CHANGELOG.md) only when the pull request bumps the base
+minor or major version. Patch-level fixes do not need manual changelog entries;
+the GitHub Release can use generated commit notes for those.
