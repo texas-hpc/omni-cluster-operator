@@ -1,0 +1,93 @@
+name: Bug report
+description: Report a reproducible problem with omni-cluster-operator.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please include enough detail for maintainers to reproduce the issue without access to your cluster.
+
+        Do not include real Omni service account keys, kubeconfigs, tokens, or other secrets.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight checks
+      options:
+        - label: I searched existing issues for a duplicate.
+          required: true
+        - label: I removed or redacted secrets from logs, manifests, and screenshots.
+          required: true
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and why it is wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: Include the smallest manifests, Helm values, or commands that reproduce the issue.
+      placeholder: |
+        1. Install chart version ...
+        2. Apply this OmniCluster ...
+        3. Observe condition ...
+    validations:
+      required: true
+  - type: textarea
+    id: resource-status
+    attributes:
+      label: Resource status and events
+      description: Paste relevant `kubectl get`, `kubectl describe`, and event output.
+      render: shell
+      placeholder: |
+        kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniciliums --namespace omni-cluster-operator-system
+        kubectl describe omnicluster <name> --namespace omni-cluster-operator-system
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Operator logs
+      description: Paste relevant controller logs with secrets redacted.
+      render: shell
+      placeholder: |
+        kubectl logs deployment/omni-cluster-operator-controller-manager --namespace omni-cluster-operator-system --all-containers
+    validations:
+      required: false
+  - type: input
+    id: operator-version
+    attributes:
+      label: Operator version
+      description: Chart version, image tag, commit SHA, or `master`.
+      placeholder: "v0.0.0"
+    validations:
+      required: true
+  - type: input
+    id: kubernetes-version
+    attributes:
+      label: Kubernetes version
+      placeholder: "v1.30.0"
+    validations:
+      required: true
+  - type: input
+    id: omni-version
+    attributes:
+      label: Omni version
+      description: Include whether this is Sidero Omni, local test Omni, or another deployment shape.
+    validations:
+      required: false
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add anything else that may help, such as webhook errors, chart values, or links to related PRs.
+    validations:
+      required: false
