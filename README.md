@@ -1,3 +1,5 @@
+<img src="docs/assets/patch-logo.png" alt="Patch, the omni-cluster-operator mascot" width="128" align="right">
+
 # omni-cluster-operator
 
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/omni-cluster-operator-crds)](https://artifacthub.io/packages/search?repo=omni-cluster-operator-crds)
@@ -14,6 +16,11 @@ Manage Sidero Omni cluster templates from Kubernetes, without replacing Omni.
 `omni-cluster-operator` gives platform teams a GitOps-friendly way to define
 Omni connections, cluster templates, machine groups, and deletion policy with
 normal Kubernetes custom resources while keeping Omni as the lifecycle authority.
+
+Patch is the `omni-cluster-operator` mascot: an armadillo with a keyboard and a
+job to do. We picked an armadillo because it is small, armored, persistent, and
+close to the ground, the same attitude this operator takes toward turning
+Kubernetes resources into steady Omni cluster-template updates.
 
 ## Which Operator Should I Use?
 
