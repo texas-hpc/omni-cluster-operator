@@ -149,7 +149,7 @@ The parent `OmniCluster` then renders without the Cilium manifest entry. If you 
 
 Plan deletion based on the mode you used:
 
-- With `mode: full`, removing the manifest from the template hands the removal behavior to Omni's full manifest sync semantics.
+- With `mode: full`, removing the manifest from the template hands object removal to Omni's full manifest sync semantics for the `cilium` manifest group.
 - With `mode: one-time`, deleting the addon usually means the operator stops expressing Cilium in the template. It should not be treated as a guaranteed workload-cluster uninstall path.
 - If you want to keep Cilium running but move management elsewhere, first switch ownership deliberately, then remove the addon after the new owner is ready.
 

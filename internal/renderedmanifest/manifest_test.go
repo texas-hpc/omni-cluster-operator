@@ -17,11 +17,33 @@ limitations under the License.
 package renderedmanifest
 
 import (
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestParseAllowsEmptyWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	objects, err := Parse([]byte(`
+---
+null
+---
+{}
+`), AllowEmpty)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(objects) != 0 {
+		t.Fatalf("Parse() returned %d objects, want 0", len(objects))
+	}
+
+	if _, err := Parse(nil); err == nil || !strings.Contains(err.Error(), "rendered manifest contains no Kubernetes objects") {
+		t.Fatalf("Parse() error = %v, want empty manifest error", err)
+	}
+}
 
 func TestSecretHasCurrentManifestValidatesSpecAndManifestHashes(t *testing.T) {
 	t.Parallel()
@@ -56,7 +78,21 @@ func TestSecretHasCurrentManifestValidatesSpecAndManifestHashes(t *testing.T) {
 			want:     true,
 		},
 		{
-			name:     "missing manifest data",
+			name: "current empty manifest",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						specHashAnnotation: currentSpecHash,
+						HashAnnotation:     Hash(nil),
+					},
+				},
+			},
+			data:     map[string][]byte{SecretKey: nil},
+			specHash: currentSpecHash,
+			want:     true,
+		},
+		{
+			name:     "missing manifest key",
 			secret:   currentSecret,
 			data:     nil,
 			specHash: currentSpecHash,

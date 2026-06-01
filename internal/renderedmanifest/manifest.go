@@ -36,6 +36,18 @@ const (
 	HashAnnotation = "omni.texashpc.com/rendered-manifest-hash"
 )
 
+type parseOptions struct {
+	allowEmpty bool
+}
+
+// ParseOption configures rendered manifest parsing.
+type ParseOption func(*parseOptions)
+
+// AllowEmpty permits manifests that render no Kubernetes objects.
+func AllowEmpty(options *parseOptions) {
+	options.allowEmpty = true
+}
+
 // Hash returns a SHA-256 hash for rendered manifest bytes.
 func Hash(manifest []byte) string {
 	sum := sha256.Sum256(manifest)
@@ -43,7 +55,12 @@ func Hash(manifest []byte) string {
 }
 
 // Parse converts a rendered multi-document YAML manifest into Omni inline JSON objects.
-func Parse(manifest []byte) ([]apiextensionsv1.JSON, error) {
+func Parse(manifest []byte, opts ...ParseOption) ([]apiextensionsv1.JSON, error) {
+	options := parseOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	reader := yaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(manifest)))
 	var objects []apiextensionsv1.JSON
 
@@ -80,7 +97,7 @@ func Parse(manifest []byte) ([]apiextensionsv1.JSON, error) {
 		objects = append(objects, apiextensionsv1.JSON{Raw: compact.Bytes()})
 	}
 
-	if len(objects) == 0 {
+	if len(objects) == 0 && !options.allowEmpty {
 		return nil, fmt.Errorf("rendered manifest contains no Kubernetes objects")
 	}
 
@@ -94,8 +111,8 @@ func SecretHasCurrentManifest(secret client.Object, data map[string][]byte, spec
 		return false
 	}
 
-	manifest := data[SecretKey]
-	if len(manifest) == 0 {
+	manifest, ok := data[SecretKey]
+	if !ok {
 		return false
 	}
 

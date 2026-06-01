@@ -77,7 +77,21 @@ Use `full` unless you have a specific handoff plan.
 
 - `OmniClusterAddon` is render-to-template only. It is not a remote Helm release reconciler.
 - Do not create another `OmniCluster.spec.kubernetes.manifests[]`, `OmniClusterAddon`, or legacy `OmniCilium` entry with the same rendered manifest name.
-- Deleting an addon removes this operator's addon resource and lets Kubernetes garbage-collect its rendered manifest Secret. The workload-cluster effect is an Omni template update, not a direct Helm uninstall.
 - If a chart requires Talos machine configuration changes, express those explicitly in `OmniCluster.spec.patches`. Generic addons do not add Cilium-specific or chart-specific Talos patches.
+
+## Delete or render no objects
+
+Deleting an addon removes this operator's addon resource and lets Kubernetes garbage-collect its rendered manifest Secret. The parent `OmniCluster` then syncs a template without that addon manifest group. This operator does not run `helm uninstall` and does not directly contact the workload cluster.
+
+If a chart update renders no Kubernetes objects, the addon stays in the template with an empty inline manifest so Omni can observe the new desired state for that manifest group.
+
+Plan deletion based on `spec.mode`:
+
+| Mode | Deletion behavior |
+| --- | --- |
+| `full` | Removing the addon, or rendering an empty manifest, hands object removal to Omni's full manifest sync semantics for that manifest group. |
+| `one-time` | Omni treats the manifest as bootstrap/handoff state. Do not use addon deletion or an empty render as a guaranteed workload-cluster uninstall path. |
+
+For destructive uninstalls, use the chart or application procedure appropriate for the workload cluster and verify the result there.
 
 For Cilium-specific Talos settings and migration guidance, see [Manage Cilium](install-cilium.md).
