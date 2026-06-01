@@ -1,5 +1,8 @@
 # omni-cluster-operator
 
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/omni-cluster-operator-crds)](https://artifacthub.io/packages/search?repo=omni-cluster-operator-crds)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/omni-cluster-operator)](https://artifacthub.io/packages/search?repo=omni-cluster-operator)
+
 Manage Sidero Omni cluster templates from Kubernetes.
 
 > [!IMPORTANT]
