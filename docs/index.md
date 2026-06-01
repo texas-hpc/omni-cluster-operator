@@ -12,14 +12,17 @@ Use it when you want:
 - GitOps-friendly Omni cluster lifecycle configuration.
 - Omni service account keys stored in Kubernetes Secrets.
 - Separate Kubernetes resources for cluster settings, control plane, workers, and static machines.
+- Optional Cilium rendering through the operator while Omni applies raw manifests.
 - Finalizer-based remote cleanup, with an orphan mode when you want to keep the Omni cluster after deleting Kubernetes resources.
 
 ## Start here
 
 1. [Install the operator](getting-started/installation.md).
-2. [Create a cluster template](getting-started/create-a-cluster.md).
-3. [Check status and debug reconciliation](guides/debugging.md).
-4. Use the [API reference](reference/api.md) when writing GitOps manifests.
+2. [Manage a cluster lifecycle](getting-started/create-a-cluster.md).
+3. [Manage Cilium](getting-started/install-cilium.md), if the cluster should receive Cilium through Omni manifest sync.
+4. [Plan GitOps ordering and deletion behavior](getting-started/gitops.md).
+5. [Check status and debug reconciliation](guides/debugging.md).
+6. Use the [API reference](reference/api.md) when writing manifests.
 
 ## Important model
 

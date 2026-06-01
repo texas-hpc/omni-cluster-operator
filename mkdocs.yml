@@ -35,8 +35,9 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
-      - Create a Cluster: getting-started/create-a-cluster.md
-      - Install Cilium: getting-started/install-cilium.md
+      - Cluster Lifecycle: getting-started/create-a-cluster.md
+      - Manage Cilium: getting-started/install-cilium.md
+      - GitOps: getting-started/gitops.md
       - Upgrading: getting-started/upgrading.md
   - Concepts:
       - Resource Model: concepts/resource-model.md
