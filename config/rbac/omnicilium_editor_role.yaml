@@ -1,7 +1,7 @@
 # This rule is not used by the project omni-cluster-operator itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read/write access to omni.texas-hpc.org resources.
+# Grants read/write access to omni.texashpc.com resources.
 # This role is intended for users who need to create, update, and delete these resources.
 
 apiVersion: rbac.authorization.k8s.io/v1
@@ -13,7 +13,7 @@ metadata:
   name: omnicilium-editor-role
 rules:
 - apiGroups:
-  - omni.texas-hpc.org
+  - omni.texashpc.com
   resources:
   - omniciliums
   verbs:
@@ -25,7 +25,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - omni.texas-hpc.org
+  - omni.texashpc.com
   resources:
   - omniciliums/status
   verbs:

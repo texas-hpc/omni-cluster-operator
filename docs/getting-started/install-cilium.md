@@ -36,7 +36,7 @@ Keep `full` unless you have a specific handoff plan. With `full`, changes to the
 This example renders Cilium `1.19.3`, enables kube-proxy replacement, and enables Gateway API support:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCilium
 metadata:
   name: cluster-01-cilium
@@ -113,7 +113,7 @@ The parent `OmniCluster` waits until the rendered Secret is current before synci
 Example chart update:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCilium
 metadata:
   name: cluster-01-cilium
@@ -191,7 +191,7 @@ The exact uninstall sequence for Cilium depends on how Omni applied the manifest
 Example final state for handing Cilium off to another manifest entry:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCluster
 metadata:
   name: cluster-01
@@ -240,7 +240,7 @@ Use a staged migration:
 Example starting point:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCilium
 metadata:
   name: cluster-01-cilium

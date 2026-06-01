@@ -20,7 +20,7 @@ If you want a specific release, choose versions from the [CRD chart package](htt
 
 - Confirm cert-manager is installed and healthy.
 - Read the release notes for API or webhook validation changes.
-- Back up GitOps manifests for `omni.texas-hpc.org` resources.
+- Back up GitOps manifests for `omni.texashpc.com` resources.
 - Check that all existing resources are reconciled before changing the controller.
 
 ```sh

@@ -10,12 +10,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-omni-texas-hpc-org-v1alpha1-omnicilium
+      path: /validate-omni-texashpc-com-v1alpha1-omnicilium
   failurePolicy: Fail
   name: vomnicilium-v1alpha1.kb.io
   rules:
   - apiGroups:
-    - omni.texas-hpc.org
+    - omni.texashpc.com
     apiVersions:
     - v1alpha1
     operations:
@@ -30,12 +30,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-omni-texas-hpc-org-v1alpha1-omnicluster
+      path: /validate-omni-texashpc-com-v1alpha1-omnicluster
   failurePolicy: Fail
   name: vomnicluster-v1alpha1.kb.io
   rules:
   - apiGroups:
-    - omni.texas-hpc.org
+    - omni.texashpc.com
     apiVersions:
     - v1alpha1
     operations:
@@ -50,12 +50,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-omni-texas-hpc-org-v1alpha1-omniconnection
+      path: /validate-omni-texashpc-com-v1alpha1-omniconnection
   failurePolicy: Fail
   name: vomniconnection-v1alpha1.kb.io
   rules:
   - apiGroups:
-    - omni.texas-hpc.org
+    - omni.texashpc.com
     apiVersions:
     - v1alpha1
     operations:
@@ -70,12 +70,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-omni-texas-hpc-org-v1alpha1-omnicontrolplane
+      path: /validate-omni-texashpc-com-v1alpha1-omnicontrolplane
   failurePolicy: Fail
   name: vomnicontrolplane-v1alpha1.kb.io
   rules:
   - apiGroups:
-    - omni.texas-hpc.org
+    - omni.texashpc.com
     apiVersions:
     - v1alpha1
     operations:
@@ -90,12 +90,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-omni-texas-hpc-org-v1alpha1-omnimachine
+      path: /validate-omni-texashpc-com-v1alpha1-omnimachine
   failurePolicy: Fail
   name: vomnimachine-v1alpha1.kb.io
   rules:
   - apiGroups:
-    - omni.texas-hpc.org
+    - omni.texashpc.com
     apiVersions:
     - v1alpha1
     operations:
@@ -110,12 +110,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-omni-texas-hpc-org-v1alpha1-omniworkers
+      path: /validate-omni-texashpc-com-v1alpha1-omniworkers
   failurePolicy: Fail
   name: vomniworkers-v1alpha1.kb.io
   rules:
   - apiGroups:
-    - omni.texas-hpc.org
+    - omni.texashpc.com
     apiVersions:
     - v1alpha1
     operations:

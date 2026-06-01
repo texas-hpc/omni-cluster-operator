@@ -17,7 +17,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - omni.texas-hpc.org
+  - omni.texashpc.com
   resources:
   - omniciliums
   - omniclusters
@@ -34,7 +34,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - omni.texas-hpc.org
+  - omni.texashpc.com
   resources:
   - omniciliums/finalizers
   - omniclusters/finalizers
@@ -45,7 +45,7 @@ rules:
   verbs:
   - update
 - apiGroups:
-  - omni.texas-hpc.org
+  - omni.texashpc.com
   resources:
   - omniciliums/status
   - omniclusters/status

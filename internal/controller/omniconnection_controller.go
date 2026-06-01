@@ -42,9 +42,9 @@ type OmniConnectionReconciler struct {
 	Omni         omniapi.Client
 }
 
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniconnections,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniconnections/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniconnections/finalizers,verbs=update
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniconnections,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniconnections/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniconnections/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
 func (r *OmniConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

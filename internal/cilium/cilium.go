@@ -42,10 +42,10 @@ const (
 	DefaultManifestName          = "cilium"
 	DefaultMode                  = "full"
 	RenderedManifestSecretKey    = "manifest.yaml"
-	RenderedManifestHashKey      = "omni.texas-hpc.org/rendered-manifest-hash"
-	RenderedManifestSpecHashKey  = "omni.texas-hpc.org/cilium-spec-hash"
-	RenderedManifestOwnerLabel   = "omni.texas-hpc.org/omnicilium"
-	RenderedManifestClusterLabel = "omni.texas-hpc.org/cluster"
+	RenderedManifestHashKey      = "omni.texashpc.com/rendered-manifest-hash"
+	RenderedManifestSpecHashKey  = "omni.texashpc.com/cilium-spec-hash"
+	RenderedManifestOwnerLabel   = "omni.texashpc.com/omnicilium"
+	RenderedManifestClusterLabel = "omni.texashpc.com/cluster"
 )
 
 const (

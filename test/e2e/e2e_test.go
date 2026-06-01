@@ -124,7 +124,7 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 
 		Eventually(func(g Gomega) {
 			_, err := kubectlApply(`
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCluster
 metadata:
   name: e2e-controller-ready
@@ -147,7 +147,7 @@ spec:
 			output, err := utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-controller-ready",
 				"-n", namespace, "-o", "jsonpath={.metadata.finalizers[0]}"))
 			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(output).To(Equal("omni.texas-hpc.org/finalizer"))
+			g.Expect(output).To(Equal("omni.texashpc.com/finalizer"))
 
 			output, err = utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-controller-ready",
 				"-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].reason}"))
@@ -158,7 +158,7 @@ spec:
 
 	It("rejects an invalid machine-set template shape", func() {
 		output, err := kubectlApply(`
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniControlPlane
 metadata:
   name: invalid-control-plane
@@ -177,7 +177,7 @@ spec:
 
 		Eventually(func(g Gomega) {
 			output, err = kubectlApply(`
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: invalid-workers
@@ -206,7 +206,7 @@ type: Opaque
 stringData:
   serviceAccountKey: local-test-placeholder
 ---
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniConnection
 metadata:
   name: e2e-omni
@@ -217,7 +217,7 @@ spec:
     serviceAccountSecretRef:
       name: e2e-omni-service-account
 ---
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCluster
 metadata:
   name: e2e-suspended
@@ -233,7 +233,7 @@ spec:
     orphan: true
   suspend: true
 ---
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniControlPlane
 metadata:
   name: e2e-suspended-control-plane
@@ -245,7 +245,7 @@ spec:
     name: control-plane
     size: 1
 ---
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniWorkers
 metadata:
   name: e2e-suspended-workers
@@ -263,7 +263,7 @@ spec:
 			output, err := utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-suspended",
 				"-n", namespace, "-o", "jsonpath={.metadata.finalizers[0]}"))
 			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(output).To(Equal("omni.texas-hpc.org/finalizer"))
+			g.Expect(output).To(Equal("omni.texashpc.com/finalizer"))
 
 			output, err = utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-suspended",
 				"-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].reason}"))
@@ -274,7 +274,7 @@ spec:
 
 	It("marks child template documents that reference a missing cluster", func() {
 		_, err := kubectlApply(`
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniMachine
 metadata:
   name: e2e-missing-cluster-machine

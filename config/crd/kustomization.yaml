@@ -2,12 +2,12 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/omni.texas-hpc.org_omniconnections.yaml
-- bases/omni.texas-hpc.org_omniciliums.yaml
-- bases/omni.texas-hpc.org_omniclusters.yaml
-- bases/omni.texas-hpc.org_omnicontrolplanes.yaml
-- bases/omni.texas-hpc.org_omnimachines.yaml
-- bases/omni.texas-hpc.org_omniworkers.yaml
+- bases/omni.texashpc.com_omniconnections.yaml
+- bases/omni.texashpc.com_omniciliums.yaml
+- bases/omni.texashpc.com_omniclusters.yaml
+- bases/omni.texashpc.com_omnicontrolplanes.yaml
+- bases/omni.texashpc.com_omnimachines.yaml
+- bases/omni.texashpc.com_omniworkers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

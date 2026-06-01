@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: omniworkers.omni.texas-hpc.org
+  name: omnicontrolplanes.omni.texashpc.com
 spec:
-  group: omni.texas-hpc.org
+  group: omni.texashpc.com
   names:
-    kind: OmniWorkers
-    listKind: OmniWorkersList
-    plural: omniworkers
-    singular: omniworkers
+    kind: OmniControlPlane
+    listKind: OmniControlPlaneList
+    plural: omnicontrolplanes
+    singular: omnicontrolplane
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OmniWorkers is the Schema for the omniworkers API
+        description: OmniControlPlane is the Schema for the omnicontrolplanes API
         properties:
           apiVersion:
             description: |-
@@ -37,16 +37,32 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of OmniWorkers
+            description: spec defines the desired state of OmniControlPlane
             properties:
               annotations:
                 additionalProperties:
                   type: string
                 description: annotations are applied to the generated Omni resource.
                 type: object
+              bootstrapSpec:
+                description: bootstrapSpec configures restore bootstrap behavior.
+                properties:
+                  clusterUUID:
+                    description: clusterUUID is the UUID of the cluster to restore
+                      from.
+                    minLength: 1
+                    type: string
+                  snapshot:
+                    description: snapshot is the snapshot file name to restore from.
+                    minLength: 1
+                    type: string
+                required:
+                - clusterUUID
+                - snapshot
+                type: object
               clusterRef:
-                description: clusterRef attaches this workers document to one OmniCluster
-                  in the same namespace.
+                description: clusterRef attaches this control plane document to one
+                  OmniCluster in the same namespace.
                 properties:
                   name:
                     description: name is the referenced object name.
@@ -54,28 +70,6 @@ spec:
                     type: string
                 required:
                 - name
-                type: object
-              deleteStrategy:
-                description: deleteStrategy controls machine removal when this set
-                  scales down.
-                properties:
-                  rolling:
-                    description: rolling configures rolling operation behavior.
-                    properties:
-                      maxParallelism:
-                        description: maxParallelism is the maximum number of machines
-                          to operate on in parallel.
-                        format: int32
-                        minimum: 1
-                        type: integer
-                    type: object
-                  type:
-                    description: type is Rolling or Unset. When Unset, Omni applies
-                      the operation at once.
-                    enum:
-                    - Rolling
-                    - Unset
-                    type: string
                 type: object
               kernelArgs:
                 description: kernelArgs are managed for static machines in this set.
@@ -154,56 +148,6 @@ spec:
                 items:
                   type: string
                 type: array
-              updateStrategy:
-                description: updateStrategy controls config changes across machines
-                  in this set.
-                properties:
-                  rolling:
-                    description: rolling configures rolling operation behavior.
-                    properties:
-                      maxParallelism:
-                        description: maxParallelism is the maximum number of machines
-                          to operate on in parallel.
-                        format: int32
-                        minimum: 1
-                        type: integer
-                    type: object
-                  type:
-                    description: type is Rolling or Unset. When Unset, Omni applies
-                      the operation at once.
-                    enum:
-                    - Rolling
-                    - Unset
-                    type: string
-                type: object
-              upgradeStrategy:
-                description: upgradeStrategy controls version, extension, and kernel
-                  arg changes across machines in this set.
-                properties:
-                  rolling:
-                    description: rolling configures rolling operation behavior.
-                    properties:
-                      maxParallelism:
-                        description: maxParallelism is the maximum number of machines
-                          to operate on in parallel.
-                        format: int32
-                        minimum: 1
-                        type: integer
-                    type: object
-                  type:
-                    description: type is Rolling or Unset. When Unset, Omni applies
-                      the operation at once.
-                    enum:
-                    - Rolling
-                    - Unset
-                    type: string
-                type: object
-              workerSetName:
-                description: |-
-                  workerSetName is the Omni workers document name. Defaults to metadata.name when omitted.
-                  Must be unique within the cluster and cannot be control-planes.
-                pattern: ^[A-Za-z0-9_-]+$
-                type: string
             required:
             - clusterRef
             type: object
@@ -211,7 +155,7 @@ spec:
             - message: exactly one of machines or machineClass is required
               rule: has(self.machines) != has(self.machineClass)
           status:
-            description: status defines the observed state of OmniWorkers
+            description: status defines the observed state of OmniControlPlane
             properties:
               clusterRef:
                 description: clusterRef is the last cluster reference observed by
@@ -282,10 +226,6 @@ spec:
                   the controller.
                 format: int64
                 type: integer
-              workerSetName:
-                description: workerSetName is the Omni worker set name rendered by
-                  the controller.
-                type: string
             type: object
         required:
         - spec

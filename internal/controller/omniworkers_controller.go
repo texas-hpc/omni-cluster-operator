@@ -36,10 +36,10 @@ type OmniWorkersReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniworkers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniworkers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniworkers/finalizers,verbs=update
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniworkers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniworkers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniworkers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters,verbs=get;list;watch
 
 func (r *OmniWorkersReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)

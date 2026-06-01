@@ -1,6 +1,6 @@
 # Resource Model
 
-The API group is `omni.texas-hpc.org/v1alpha1`.
+The API group is `omni.texashpc.com/v1alpha1`.
 
 ## Resources
 

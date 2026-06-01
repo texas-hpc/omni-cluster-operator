@@ -82,7 +82,7 @@ kubectl create secret generic omni-service-account \
 kubectl get pods,svc,certificate \
   --namespace omni-cluster-operator-system
 
-kubectl get crd | grep omni.texas-hpc.org
+kubectl get crd | grep omni.texashpc.com
 ```
 
 The operator runs in namespaced mode. Create `OmniConnection`, `OmniCluster`,

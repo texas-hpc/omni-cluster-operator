@@ -26,7 +26,7 @@ import (
 
 const (
 	// Finalizer is attached to resources that own remote Omni lifecycle.
-	Finalizer = "omni.texas-hpc.org/finalizer"
+	Finalizer = "omni.texashpc.com/finalizer"
 
 	// ConditionReady reports whether the resource is ready for use.
 	ConditionReady = "Ready"

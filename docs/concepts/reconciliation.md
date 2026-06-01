@@ -2,7 +2,7 @@
 
 On each `OmniCluster` reconcile, the operator:
 
-1. Adds `omni.texas-hpc.org/finalizer`.
+1. Adds `omni.texashpc.com/finalizer`.
 2. Reads the referenced `OmniConnection`.
 3. Selects child `OmniControlPlane`, `OmniWorkers`, and `OmniMachine` resources in the same namespace by `clusterRef`.
 4. Renders deterministic Omni cluster-template YAML.

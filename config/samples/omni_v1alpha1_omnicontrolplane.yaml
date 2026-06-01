@@ -1,4 +1,4 @@
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniControlPlane
 metadata:
   labels:

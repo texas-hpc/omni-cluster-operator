@@ -65,7 +65,7 @@ kubectl create secret generic omni-service-account \
 kubectl get pods,svc,certificate \
   --namespace omni-cluster-operator-system
 
-kubectl get crd | grep omni.texas-hpc.org
+kubectl get crd | grep omni.texashpc.com
 ```
 
 The manager pod should be running, the webhook certificate should become ready, and the Omni CRDs should be present.

@@ -1,7 +1,7 @@
 # This rule is not used by the project omni-cluster-operator itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to omni.texas-hpc.org resources.
+# Grants read-only access to omni.texashpc.com resources.
 # This role is intended for users who need visibility into these resources
 # without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
 
@@ -14,7 +14,7 @@ metadata:
   name: omniworkers-viewer-role
 rules:
 - apiGroups:
-  - omni.texas-hpc.org
+  - omni.texashpc.com
   resources:
   - omniworkers
   verbs:
@@ -22,7 +22,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - omni.texas-hpc.org
+  - omni.texashpc.com
   resources:
   - omniworkers/status
   verbs:

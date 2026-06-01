@@ -36,10 +36,10 @@ type OmniControlPlaneReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omnicontrolplanes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omnicontrolplanes/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omnicontrolplanes/finalizers,verbs=update
-// +kubebuilder:rbac:groups=omni.texas-hpc.org,resources=omniclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnicontrolplanes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnicontrolplanes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnicontrolplanes/finalizers,verbs=update
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters,verbs=get;list;watch
 
 func (r *OmniControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)

@@ -31,7 +31,7 @@ import (
 	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 )
 
-const validationGroup = "omni.texas-hpc.org"
+const validationGroup = "omni.texashpc.com"
 
 func invalid(kind, name string, allErrs field.ErrorList) error {
 	if len(allErrs) == 0 {

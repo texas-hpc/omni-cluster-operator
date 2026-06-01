@@ -33,7 +33,7 @@ func SetupOmniClusterWebhookWithManager(mgr ctrl.Manager) error {
 }
 
 // NOTE: If you want to customise the 'path', use the flags '--defaulting-path' or '--validation-path'.
-// +kubebuilder:webhook:path=/validate-omni-texas-hpc-org-v1alpha1-omnicluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=omni.texas-hpc.org,resources=omniclusters,verbs=create;update,versions=v1alpha1,name=vomnicluster-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-omni-texashpc-com-v1alpha1-omnicluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=omni.texashpc.com,resources=omniclusters,verbs=create;update,versions=v1alpha1,name=vomnicluster-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // OmniClusterCustomValidator struct is responsible for validating the OmniCluster resource
 // when it is created, updated, or deleted.

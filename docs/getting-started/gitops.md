@@ -22,7 +22,7 @@ Do not commit real Omni service account keys. Use your normal secret workflow, s
 The Secret must exist before the `OmniConnection` can become ready:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniConnection
 metadata:
   name: omni
@@ -42,7 +42,7 @@ Use `OmniCluster.spec.suspend: true` to stage multi-object changes without synci
 For example, suspend before changing the control plane, workers, machine-specific patches, and Cilium in one pull request:
 
 ```yaml
-apiVersion: omni.texas-hpc.org/v1alpha1
+apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniCluster
 metadata:
   name: cluster-01
