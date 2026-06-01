@@ -175,28 +175,6 @@ func TestOmniCiliumValidation(t *testing.T) {
 		t.Fatalf("ValidateCreate() error = %v, want nil", err)
 	}
 
-	func TestOmniKubeconfigExportValidation(t *testing.T) {
-		t.Parallel()
-
-		validator := &OmniKubeconfigExportCustomValidator{}
-		export := validKubeconfigExport()
-
-		_, err := validator.ValidateCreate(context.Background(), export)
-		if err != nil {
-			t.Fatalf("ValidateCreate() error = %v, want nil", err)
-		}
-
-		export = validKubeconfigExport()
-		export.Spec.ServiceAccount.Groups = []string{"system:masters"}
-		_, err = validator.ValidateCreate(context.Background(), export)
-		requireErrorContains(t, err, "system:masters requires allowClusterAdmin=true")
-
-		export = validKubeconfigExport()
-		export.Spec.RenewBefore = &metav1.Duration{Duration: 24 * time.Hour}
-		_, err = validator.ValidateCreate(context.Background(), export)
-		requireErrorContains(t, err, "renewBefore must be less than ttl")
-	}
-
 	install.Spec.ChartVersion = " "
 	_, err = validator.ValidateCreate(context.Background(), install)
 	requireErrorContains(t, err, "chartVersion is required")
@@ -225,6 +203,28 @@ func TestOmniCiliumValidation(t *testing.T) {
 	if len(warnings) != 0 {
 		t.Fatalf("ValidateDelete() warnings = %#v, want none", warnings)
 	}
+}
+
+func TestOmniKubeconfigExportValidation(t *testing.T) {
+	t.Parallel()
+
+	validator := &OmniKubeconfigExportCustomValidator{}
+	export := validKubeconfigExport()
+
+	_, err := validator.ValidateCreate(context.Background(), export)
+	if err != nil {
+		t.Fatalf("ValidateCreate() error = %v, want nil", err)
+	}
+
+	export = validKubeconfigExport()
+	export.Spec.ServiceAccount.Groups = []string{"system:masters"}
+	_, err = validator.ValidateCreate(context.Background(), export)
+	requireErrorContains(t, err, "system:masters requires allowClusterAdmin=true")
+
+	export = validKubeconfigExport()
+	export.Spec.RenewBefore = &metav1.Duration{Duration: 24 * time.Hour}
+	_, err = validator.ValidateCreate(context.Background(), export)
+	requireErrorContains(t, err, "renewBefore must be less than ttl")
 }
 
 func validCluster() *omniv1alpha1.OmniCluster {

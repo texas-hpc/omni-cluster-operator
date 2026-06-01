@@ -665,88 +665,6 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 		},
 	}
 
-	func TestOmniKubeconfigExportReconcilesSecret(t *testing.T) {
-		t.Parallel()
-
-		ctx := context.Background()
-		scheme := testScheme(t)
-		export := testKubeconfigExport()
-		k8sClient := fake.NewClientBuilder().
-			WithScheme(scheme).
-			WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
-			WithObjects(testConnection(), testCluster(), export).
-			Build()
-
-		reconciler := &OmniKubeconfigExportReconciler{
-			Client: k8sClient,
-			Scheme: scheme,
-			Omni: &fakeOmni{
-				kubeconfigData: []byte("apiVersion: v1\nkind: Config\n"),
-			},
-		}
-		request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: export.Name}}
-
-		if _, err := reconciler.Reconcile(ctx, request); err != nil {
-			t.Fatalf("Reconcile() error = %v", err)
-		}
-
-		secret := &corev1.Secret{}
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: export.Spec.TargetSecretRef.Name}, secret); err != nil {
-			t.Fatalf("get secret: %v", err)
-		}
-		if len(secret.Data[kubeconfigSecretKey]) == 0 {
-			t.Fatal("secret kubeconfig is empty")
-		}
-
-		updated := &omniv1alpha1.OmniKubeconfigExport{}
-		if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-			t.Fatalf("get export: %v", err)
-		}
-		if updated.Status.ExpirationTime == nil {
-			t.Fatal("ExpirationTime is nil")
-		}
-		if updated.Status.LastRotationTime == nil {
-			t.Fatal("LastRotationTime is nil")
-		}
-		if updated.Status.KubeconfigHash == "" {
-			t.Fatal("KubeconfigHash is empty")
-		}
-		if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
-			t.Fatalf("Ready condition = %#v, want True", got)
-		}
-	}
-
-	func TestOmniKubeconfigExportDeletePolicyDeletesSecret(t *testing.T) {
-		t.Parallel()
-
-		ctx := context.Background()
-		scheme := testScheme(t)
-		export := testKubeconfigExport()
-		now := metav1.Now()
-		export.Finalizers = []string{omniKubeconfigExportFinalizer}
-		export.DeletionTimestamp = &now
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      export.Spec.TargetSecretRef.Name,
-				Namespace: export.Namespace,
-			},
-		}
-		k8sClient := fake.NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(export, secret).
-			Build()
-
-		reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient, Scheme: scheme}
-		if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: export.Namespace, Name: export.Name}}); err != nil {
-			t.Fatalf("Reconcile() error = %v", err)
-		}
-
-		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: export.Namespace, Name: export.Spec.TargetSecretRef.Name}, &corev1.Secret{})
-		if !apierrors.IsNotFound(err) {
-			t.Fatalf("secret get error = %v, want NotFound", err)
-		}
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -791,6 +709,88 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 				t.Fatalf("Reachable condition = %#v, want status %s reason %s", reachable, tt.wantStatus, tt.wantReason)
 			}
 		})
+	}
+}
+
+func TestOmniKubeconfigExportReconcilesSecret(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	export := testKubeconfigExport()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
+		WithObjects(testConnection(), testCluster(), export).
+		Build()
+
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+		Omni: &fakeOmni{
+			kubeconfigData: []byte("apiVersion: v1\nkind: Config\n"),
+		},
+	}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: export.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	secret := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: export.Spec.TargetSecretRef.Name}, secret); err != nil {
+		t.Fatalf("get secret: %v", err)
+	}
+	if len(secret.Data[kubeconfigSecretKey]) == 0 {
+		t.Fatal("secret kubeconfig is empty")
+	}
+
+	updated := &omniv1alpha1.OmniKubeconfigExport{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get export: %v", err)
+	}
+	if updated.Status.ExpirationTime == nil {
+		t.Fatal("ExpirationTime is nil")
+	}
+	if updated.Status.LastRotationTime == nil {
+		t.Fatal("LastRotationTime is nil")
+	}
+	if updated.Status.KubeconfigHash == "" {
+		t.Fatal("KubeconfigHash is empty")
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Ready condition = %#v, want True", got)
+	}
+}
+
+func TestOmniKubeconfigExportDeletePolicyDeletesSecret(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	export := testKubeconfigExport()
+	now := metav1.Now()
+	export.Finalizers = []string{omniKubeconfigExportFinalizer}
+	export.DeletionTimestamp = &now
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      export.Spec.TargetSecretRef.Name,
+			Namespace: export.Namespace,
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(export, secret).
+		Build()
+
+	reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient, Scheme: scheme}
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: export.Namespace, Name: export.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: export.Namespace, Name: export.Spec.TargetSecretRef.Name}, &corev1.Secret{})
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("secret get error = %v, want NotFound", err)
 	}
 }
 

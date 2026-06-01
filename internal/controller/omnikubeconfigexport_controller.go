@@ -28,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -186,7 +187,7 @@ func (r *OmniKubeconfigExportReconciler) Reconcile(ctx context.Context, req ctrl
 		secret.Annotations[kubeconfigExpirationAnno] = expiration.Time.UTC().Format(time.RFC3339)
 	}
 
-	if export.Spec.DeletionPolicy == omniv1alpha1.KubeconfigExportDeletionPolicyOrphan {
+	if effectiveDeletionPolicy(export) == omniv1alpha1.KubeconfigExportDeletionPolicyOrphan {
 		secret.OwnerReferences = removeOwnerReference(secret.OwnerReferences, export.GetUID())
 	} else if err := controllerutil.SetControllerReference(export, secret, r.Scheme); err != nil {
 		return ctrl.Result{}, err
@@ -217,7 +218,7 @@ func (r *OmniKubeconfigExportReconciler) Reconcile(ctx context.Context, req ctrl
 }
 
 func (r *OmniKubeconfigExportReconciler) reconcileDelete(ctx context.Context, export *omniv1alpha1.OmniKubeconfigExport) (ctrl.Result, error) {
-	if controllerutil.ContainsFinalizer(export, omniKubeconfigExportFinalizer) && export.Spec.DeletionPolicy == omniv1alpha1.KubeconfigExportDeletionPolicyDelete {
+	if controllerutil.ContainsFinalizer(export, omniKubeconfigExportFinalizer) && effectiveDeletionPolicy(export) == omniv1alpha1.KubeconfigExportDeletionPolicyDelete {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: export.Namespace,
@@ -299,6 +300,14 @@ func clusterName(cluster *omniv1alpha1.OmniCluster) string {
 	}
 
 	return cluster.Name
+}
+
+func effectiveDeletionPolicy(export *omniv1alpha1.OmniKubeconfigExport) omniv1alpha1.KubeconfigExportDeletionPolicy {
+	if export.Spec.DeletionPolicy == "" {
+		return omniv1alpha1.KubeconfigExportDeletionPolicyDelete
+	}
+
+	return export.Spec.DeletionPolicy
 }
 
 func removeOwnerReference(references []metav1.OwnerReference, uid types.UID) []metav1.OwnerReference {

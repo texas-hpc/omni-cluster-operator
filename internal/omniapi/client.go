@@ -144,16 +144,18 @@ func (c *RealClient) StatusCluster(ctx context.Context, connection *omniv1alpha1
 }
 
 // ServiceAccountKubeconfig requests a service-account kubeconfig from Omni management API.
-func (c *RealClient) ServiceAccountKubeconfig(ctx context.Context, connection *omniv1alpha1.OmniConnection, clusterName string, ttl time.Duration, user string, groups []string) ([]byte, error) {
+func (c *RealClient) ServiceAccountKubeconfig(ctx context.Context, connection *omniv1alpha1.OmniConnection, clusterName string, ttl time.Duration, user string, groups []string) (kubeconfig []byte, retErr error) {
 	omniClient, err := c.newOmniClient(ctx, connection)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		_ = omniClient.Close()
+		if closeErr := omniClient.Close(); closeErr != nil && retErr == nil {
+			retErr = fmt.Errorf("close Omni client: %w", closeErr)
+		}
 	}()
 
-	kubeconfig, err := omniClient.Management().WithCluster(clusterName).Kubeconfig(ctx, management.WithServiceAccount(ttl, user, groups...))
+	kubeconfig, err = omniClient.Management().WithCluster(clusterName).Kubeconfig(ctx, management.WithServiceAccount(ttl, user, groups...))
 	if err != nil {
 		return nil, fmt.Errorf("request service-account kubeconfig for cluster %q: %w", clusterName, err)
 	}
