@@ -188,6 +188,11 @@ func TestRenderAndValidateMachineClassTemplate(t *testing.T) {
 func TestRenderAndValidateMultipleWorkerSets(t *testing.T) {
 	t.Parallel()
 
+	const (
+		gpuX86MachineClass   = "gpu-x86"
+		gpuArm64MachineClass = "gpu-arm64"
+	)
+
 	result, err := Render(Inputs{
 		Cluster: &omniv1alpha1.OmniCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: machineClassClusterName},
@@ -210,13 +215,13 @@ func TestRenderAndValidateMultipleWorkerSets(t *testing.T) {
 		},
 		Workers: []omniv1alpha1.OmniWorkers{
 			{
-				ObjectMeta: metav1.ObjectMeta{Name: "gpu-x86"},
+				ObjectMeta: metav1.ObjectMeta{Name: gpuX86MachineClass},
 				Spec: omniv1alpha1.OmniWorkersSpec{
 					ClusterRef:    omniv1alpha1.OmniClusterRef{Name: machineClassClusterName},
 					WorkerSetName: "gpu-x86-oss",
 					MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 						MachineClass: &omniv1alpha1.MachineClass{
-							Name: "gpu-x86",
+							Name: gpuX86MachineClass,
 							Size: intstr.FromInt32(2),
 						},
 						SystemExtensions: []string{
@@ -227,13 +232,13 @@ func TestRenderAndValidateMultipleWorkerSets(t *testing.T) {
 				},
 			},
 			{
-				ObjectMeta: metav1.ObjectMeta{Name: "gpu-arm64"},
+				ObjectMeta: metav1.ObjectMeta{Name: gpuArm64MachineClass},
 				Spec: omniv1alpha1.OmniWorkersSpec{
 					ClusterRef:    omniv1alpha1.OmniClusterRef{Name: machineClassClusterName},
 					WorkerSetName: "gpu-arm64-proprietary",
 					MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
 						MachineClass: &omniv1alpha1.MachineClass{
-							Name: "gpu-arm64",
+							Name: gpuArm64MachineClass,
 							Size: intstr.FromInt32(1),
 						},
 						SystemExtensions: []string{
@@ -253,8 +258,8 @@ func TestRenderAndValidateMultipleWorkerSets(t *testing.T) {
 	for _, want := range []string{
 		"name: gpu-arm64-proprietary",
 		"name: gpu-x86-oss",
-		"name: gpu-arm64",
-		"name: gpu-x86",
+		"name: " + gpuArm64MachineClass,
+		"name: " + gpuX86MachineClass,
 		"siderolabs/nonfree-kmod-nvidia-production",
 		"siderolabs/nvidia-open-gpu-kernel-modules-production",
 	} {
@@ -265,7 +270,7 @@ func TestRenderAndValidateMultipleWorkerSets(t *testing.T) {
 	if got := strings.Count(rendered, "kind: Workers"); got != 2 {
 		t.Fatalf("rendered Workers document count = %d, want 2:\n%s", got, rendered)
 	}
-	if got, want := result.WorkersRefs, []string{"gpu-arm64", "gpu-x86"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	if got, want := result.WorkersRefs, []string{gpuArm64MachineClass, gpuX86MachineClass}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("WorkersRefs = %#v, want %#v", got, want)
 	}
 
