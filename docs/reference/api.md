@@ -105,7 +105,7 @@ Status includes rendered manifest Secret name, rendered manifest hash, manifest 
 
 ## OmniCilium
 
-Defines a legacy Cilium install for one `OmniCluster`. New Cilium manifests should prefer `OmniClusterAddon` plus explicit Talos patches on `OmniCluster`.
+Deprecated. Defines a legacy Cilium install for one `OmniCluster`. New Cilium manifests should prefer `OmniClusterAddon` plus explicit Talos patches on `OmniCluster`.
 
 | Field | Required | Notes |
 | --- | --- | --- |
