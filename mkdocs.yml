@@ -1,5 +1,5 @@
 site_name: omni-cluster-operator
-site_description: User documentation for the Kubernetes operator that manages Sidero Omni cluster templates.
+site_description: User documentation for the Kubernetes operator that manages Sidero Omni cluster templates without replacing Omni.
 site_url: https://texas-hpc.github.io/omni-cluster-operator/
 repo_url: https://github.com/texas-hpc/omni-cluster-operator
 repo_name: texas-hpc/omni-cluster-operator
@@ -41,6 +41,7 @@ nav:
       - GitOps: getting-started/gitops.md
       - Upgrading: getting-started/upgrading.md
   - Concepts:
+      - Choosing an Operator: concepts/choosing-an-operator.md
       - Resource Model: concepts/resource-model.md
       - Reconciliation: concepts/reconciliation.md
   - Reference:
