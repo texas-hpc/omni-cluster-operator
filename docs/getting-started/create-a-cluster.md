@@ -248,6 +248,40 @@ kubectl describe omnicluster cluster-01 \
 
 `OmniCluster.status.renderedTemplateHash`, `status.lastSyncTime`, and conditions show whether the current Kubernetes resources were rendered and synced successfully.
 
+## Access the workload cluster
+
+After Omni creates the cluster and reports the Kubernetes API as available, get workload-cluster credentials from Omni. `omni-cluster-operator` does not automatically write a child-cluster kubeconfig Secret into the management cluster.
+
+For human access, download the kubeconfig from the Omni UI, or use `omnictl`:
+
+```sh
+omnictl kubeconfig --cluster <omni-cluster-name> --merge
+```
+
+This is the normal path for interactive `kubectl` access. Access is still governed by Omni authentication and access policy.
+
+For non-interactive automation, create a Kubernetes service-account kubeconfig intentionally:
+
+```sh
+omnictl kubeconfig \
+  --cluster <omni-cluster-name> \
+  --service-account \
+  --user <kubernetes-subject> \
+  --groups <kubernetes-group> \
+  --ttl <duration> \
+  <path-to-kubeconfig>
+```
+
+Choose the service-account subject, groups, and TTL deliberately. Do not rely on broad defaults, and store the generated kubeconfig with the same care as any bearer-token credential. This is separate from the Omni service account key used by `OmniConnection`, which authenticates this operator to Omni.
+
+For Talos access, download the cluster talosconfig from the Omni UI or use:
+
+```sh
+omnictl talosconfig --cluster <omni-cluster-name>
+```
+
+Treat talosconfig as privileged operational access.
+
 ## Update the cluster
 
 Update the same resources you used to create the cluster. The operator treats edits as desired-state changes and reconciles the Omni template again.

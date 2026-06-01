@@ -80,6 +80,7 @@ deployment.
 - [Installation](https://texas-hpc.github.io/omni-cluster-operator/getting-started/installation/)
 - [Cluster lifecycle](https://texas-hpc.github.io/omni-cluster-operator/getting-started/create-a-cluster/)
 - [Manage Cilium](https://texas-hpc.github.io/omni-cluster-operator/getting-started/install-cilium/)
+- [NVIDIA GPU workloads](https://texas-hpc.github.io/omni-cluster-operator/getting-started/nvidia-gpu/)
 - [GitOps](https://texas-hpc.github.io/omni-cluster-operator/getting-started/gitops/)
 - [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
 - [Debugging](https://texas-hpc.github.io/omni-cluster-operator/guides/debugging/)

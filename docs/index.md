@@ -20,9 +20,10 @@ Use it when you want:
 1. [Install the operator](getting-started/installation.md).
 2. [Manage a cluster lifecycle](getting-started/create-a-cluster.md).
 3. [Manage Cilium](getting-started/install-cilium.md), if the cluster should receive Cilium through Omni manifest sync.
-4. [Plan GitOps ordering and deletion behavior](getting-started/gitops.md).
-5. [Check status and debug reconciliation](guides/debugging.md).
-6. Use the [API reference](reference/api.md) when writing manifests.
+4. [Configure NVIDIA GPU workers](getting-started/nvidia-gpu.md), if the cluster should run GPU workloads.
+5. [Plan GitOps ordering and deletion behavior](getting-started/gitops.md).
+6. [Check status and debug reconciliation](guides/debugging.md).
+7. Use the [API reference](reference/api.md) when writing manifests.
 
 ## Important model
 

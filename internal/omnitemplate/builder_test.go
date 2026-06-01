@@ -185,6 +185,95 @@ func TestRenderAndValidateMachineClassTemplate(t *testing.T) {
 	}
 }
 
+func TestRenderAndValidateMultipleWorkerSets(t *testing.T) {
+	t.Parallel()
+
+	result, err := Render(Inputs{
+		Cluster: &omniv1alpha1.OmniCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: machineClassClusterName},
+			Spec: omniv1alpha1.OmniClusterSpec{
+				Kubernetes: omniv1alpha1.KubernetesSpec{Version: testKubernetesVersion},
+				Talos:      omniv1alpha1.TalosSpec{Version: testTalosVersion},
+			},
+		},
+		ControlPlane: &omniv1alpha1.OmniControlPlane{
+			ObjectMeta: metav1.ObjectMeta{Name: "cp"},
+			Spec: omniv1alpha1.OmniControlPlaneSpec{
+				ClusterRef: omniv1alpha1.OmniClusterRef{Name: machineClassClusterName},
+				MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
+					MachineClass: &omniv1alpha1.MachineClass{
+						Name: "control-plane",
+						Size: intstr.FromInt32(3),
+					},
+				},
+			},
+		},
+		Workers: []omniv1alpha1.OmniWorkers{
+			{
+				ObjectMeta: metav1.ObjectMeta{Name: "gpu-x86"},
+				Spec: omniv1alpha1.OmniWorkersSpec{
+					ClusterRef:    omniv1alpha1.OmniClusterRef{Name: machineClassClusterName},
+					WorkerSetName: "gpu-x86-oss",
+					MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
+						MachineClass: &omniv1alpha1.MachineClass{
+							Name: "gpu-x86",
+							Size: intstr.FromInt32(2),
+						},
+						SystemExtensions: []string{
+							"siderolabs/nvidia-open-gpu-kernel-modules-production",
+							"siderolabs/nvidia-container-toolkit-production",
+						},
+					},
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{Name: "gpu-arm64"},
+				Spec: omniv1alpha1.OmniWorkersSpec{
+					ClusterRef:    omniv1alpha1.OmniClusterRef{Name: machineClassClusterName},
+					WorkerSetName: "gpu-arm64-proprietary",
+					MachineSetSpecFields: omniv1alpha1.MachineSetSpecFields{
+						MachineClass: &omniv1alpha1.MachineClass{
+							Name: "gpu-arm64",
+							Size: intstr.FromInt32(1),
+						},
+						SystemExtensions: []string{
+							"siderolabs/nonfree-kmod-nvidia-production",
+							"siderolabs/nvidia-container-toolkit-production",
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	rendered := string(result.Template)
+	for _, want := range []string{
+		"name: gpu-arm64-proprietary",
+		"name: gpu-x86-oss",
+		"name: gpu-arm64",
+		"name: gpu-x86",
+		"siderolabs/nonfree-kmod-nvidia-production",
+		"siderolabs/nvidia-open-gpu-kernel-modules-production",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered template missing %q:\n%s", want, rendered)
+		}
+	}
+	if got := strings.Count(rendered, "kind: Workers"); got != 2 {
+		t.Fatalf("rendered Workers document count = %d, want 2:\n%s", got, rendered)
+	}
+	if got, want := result.WorkersRefs, []string{"gpu-arm64", "gpu-x86"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("WorkersRefs = %#v, want %#v", got, want)
+	}
+
+	if err := Validate(result.Template, ""); err != nil {
+		t.Fatalf("Validate() error = %v\n%s", err, rendered)
+	}
+}
+
 func TestRenderRejectsDuplicateCiliumManifestName(t *testing.T) {
 	t.Parallel()
 
