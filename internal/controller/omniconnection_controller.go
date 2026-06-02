@@ -70,11 +70,13 @@ func (r *OmniConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			message := fmt.Sprintf("failed to connect to Omni: %v", err)
 			omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReachable, metav1.ConditionFalse, connection.Generation, omniv1alpha1.ReasonConnectionFailed, message))
 			omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionFalse, connection.Generation, omniv1alpha1.ReasonConnectionFailed, message))
+			omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionStalled, metav1.ConditionTrue, connection.Generation, omniv1alpha1.ReasonConnectionFailed, message))
 			return
 		}
 
 		omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReachable, metav1.ConditionTrue, connection.Generation, omniv1alpha1.ReasonConnectionReady, output))
 		omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionTrue, connection.Generation, omniv1alpha1.ReasonConnectionReady, output))
+		omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionStalled, metav1.ConditionFalse, connection.Generation, omniv1alpha1.ReasonConnectionReady, output))
 	})
 	if statusErr != nil {
 		return ctrl.Result{}, statusErr

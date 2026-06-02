@@ -13,7 +13,7 @@ Defines one Omni endpoint and the service account key used by the operator.
 | `spec.auth.serviceAccountSecretRef.key` | Yes | Secret key. Defaults to `serviceAccountKey`. |
 | `spec.insecureSkipTLSVerify` | No | Disables TLS verification. Use only for local development. |
 
-Status includes `Ready`, `Reachable`, `endpoint`, `connectionRef`, `observedGeneration`, and `lastCheckTime`.
+Status includes `Ready`, `Reachable`, `Stalled`, `endpoint`, `connectionRef`, `observedGeneration`, and `lastCheckTime`.
 
 ## OmniCluster
 

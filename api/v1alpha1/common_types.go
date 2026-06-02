@@ -32,6 +32,8 @@ const (
 
 	// ConditionReady reports whether the resource is ready for use.
 	ConditionReady = "Ready"
+	// ConditionStalled reports whether reconciliation is blocked by an error.
+	ConditionStalled = "Stalled"
 	// ConditionReachable reports whether the operator can reach an Omni connection.
 	ConditionReachable = "Reachable"
 	// ConditionAccepted reports whether a child template document is attached to an OmniCluster.

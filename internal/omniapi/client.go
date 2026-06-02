@@ -19,6 +19,7 @@ package omniapi
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -208,6 +209,27 @@ func (c *RealClient) serviceAccountKey(ctx context.Context, connection *omniv1al
 	if serviceAccountKey == "" {
 		return "", fmt.Errorf("secret %s/%s key %q is empty", connection.Namespace, ref.Name, ref.Key)
 	}
+	if containsOmniEnvAssignment(serviceAccountKey) {
+		return "", fmt.Errorf("secret %s/%s key %q contains Omni environment assignments; store only the OMNI_SERVICE_ACCOUNT_KEY value", connection.Namespace, ref.Name, ref.Key)
+	}
+	if _, err := base64.StdEncoding.DecodeString(serviceAccountKey); err != nil {
+		return "", fmt.Errorf("secret %s/%s key %q must contain the base64-encoded Omni service account key: %w", connection.Namespace, ref.Name, ref.Key, err)
+	}
 
 	return serviceAccountKey, nil
+}
+
+func containsOmniEnvAssignment(value string) bool {
+	for _, line := range strings.FieldsFunc(value, func(r rune) bool {
+		return r == '\n' || r == '\r'
+	}) {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
+		if strings.HasPrefix(line, "OMNI_ENDPOINT=") ||
+			strings.HasPrefix(line, "OMNI_SERVICE_ACCOUNT_KEY=") ||
+			strings.HasPrefix(line, "SIDERO_SERVICE_ACCOUNT_KEY=") {
+			return true
+		}
+	}
+
+	return false
 }
