@@ -21,6 +21,8 @@ entries under the released version heading.
 
 ### Changed
 
+- Reset the artifact release baseline to `1.0.0` for the first stable release
+  line after the GHCR package and GitHub release history reset.
 - Updated Cilium samples and docs to use `OmniClusterAddon` plus explicit
   `OmniCluster.spec.patches`; `OmniCilium` remains available as a legacy
   compatibility resource.
