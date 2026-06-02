@@ -18,6 +18,8 @@ entries under the released version heading.
   service-account kubeconfig Secret exports.
 - Added `OmniClusterAddon` for generic Helm-rendered manifests that are cached
   in Kubernetes Secrets and injected into `OmniCluster` templates.
+- Added `OmniHelmRelease` for opt-in direct Helm release reconciliation against
+  workload clusters using explicit kubeconfig Secrets.
 
 ### Changed
 

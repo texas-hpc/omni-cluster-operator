@@ -93,8 +93,8 @@ kubectl get crd | grep omni.texashpc.com
 ```
 
 The operator runs in namespaced mode. Create `OmniConnection`, `OmniCluster`,
-and child resources in the operator release namespace unless you customize the
-deployment.
+child resources, explicit kubeconfig exports, and direct Helm releases in the
+operator release namespace unless you customize the deployment.
 
 ## Documentation
 
@@ -102,6 +102,7 @@ deployment.
 - [Cluster lifecycle](https://texas-hpc.github.io/omni-cluster-operator/getting-started/create-a-cluster/)
 - [Workload access](https://texas-hpc.github.io/omni-cluster-operator/getting-started/workload-access/)
 - [Manage addons](https://texas-hpc.github.io/omni-cluster-operator/getting-started/manage-addons/)
+- [Direct Helm reconciliation](https://texas-hpc.github.io/omni-cluster-operator/concepts/direct-helm-reconciliation/)
 - [Manage Cilium](https://texas-hpc.github.io/omni-cluster-operator/getting-started/install-cilium/)
 - [NVIDIA GPU workloads](https://texas-hpc.github.io/omni-cluster-operator/getting-started/nvidia-gpu/)
 - [GitOps](https://texas-hpc.github.io/omni-cluster-operator/getting-started/gitops/)

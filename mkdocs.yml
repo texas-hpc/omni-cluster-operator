@@ -46,6 +46,7 @@ nav:
       - Choosing an Operator: concepts/choosing-an-operator.md
       - Resource Model: concepts/resource-model.md
       - Reconciliation: concepts/reconciliation.md
+      - Direct Helm Reconciliation: concepts/direct-helm-reconciliation.md
   - Reference:
       - API Reference: reference/api.md
       - Helm Chart: reference/helm-chart.md

@@ -22,6 +22,8 @@ The operator does not automatically write workload-cluster kubeconfigs or talosc
 
 Use `OmniKubeconfigExport` when a controller, job, or GitOps workflow in the management cluster needs a workload-cluster kubeconfig Secret.
 
+`OmniHelmRelease` is one such consumer. It uses the exported kubeconfig Secret to reconcile Helm releases directly in the workload cluster.
+
 ```yaml
 apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniKubeconfigExport

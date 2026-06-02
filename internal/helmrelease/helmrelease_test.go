@@ -1,0 +1,135 @@
+package helmrelease
+
+import (
+	"testing"
+	"time"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
+)
+
+const (
+	testReleaseName      = "apps"
+	testReleaseNamespace = "apps-system"
+)
+
+func TestNormalizedSpecDefaultsAndOverrides(t *testing.T) {
+	t.Parallel()
+
+	item := testRelease()
+	item.Spec.ReleaseName = ""
+	item.Spec.Namespace = ""
+	item.Spec.KubeconfigSecretRef.Key = ""
+	item.Spec.Timeout = nil
+	item.Spec.DeletionPolicy = ""
+
+	if got := ReleaseName(item); got != item.Name {
+		t.Fatalf("ReleaseName() = %q, want metadata name", got)
+	}
+	if got := Namespace(item); got != DefaultNamespace {
+		t.Fatalf("Namespace() = %q, want %q", got, DefaultNamespace)
+	}
+	if got := KubeconfigSecretKey(item); got != DefaultKubeconfigKey {
+		t.Fatalf("KubeconfigSecretKey() = %q, want %q", got, DefaultKubeconfigKey)
+	}
+	if got := Timeout(item); got != DefaultTimeout {
+		t.Fatalf("Timeout() = %s, want %s", got, DefaultTimeout)
+	}
+	if got := DeletionPolicy(item); got != DefaultDeletionPolicy {
+		t.Fatalf("DeletionPolicy() = %q, want %q", got, DefaultDeletionPolicy)
+	}
+
+	item.Spec.ReleaseName = testReleaseName
+	item.Spec.Namespace = testReleaseNamespace
+	item.Spec.KubeconfigSecretRef.Key = "workload.kubeconfig"
+	item.Spec.Timeout = &metav1.Duration{Duration: 10 * time.Minute}
+	item.Spec.DeletionPolicy = omniv1alpha1.HelmReleaseDeletionPolicyOrphan
+
+	if got := ReleaseName(item); got != testReleaseName {
+		t.Fatalf("ReleaseName() override = %q", got)
+	}
+	if got := Namespace(item); got != testReleaseNamespace {
+		t.Fatalf("Namespace() override = %q", got)
+	}
+	if got := KubeconfigSecretKey(item); got != "workload.kubeconfig" {
+		t.Fatalf("KubeconfigSecretKey() override = %q", got)
+	}
+	if got := Timeout(item); got != 10*time.Minute {
+		t.Fatalf("Timeout() override = %s", got)
+	}
+	if got := DeletionPolicy(item); got != omniv1alpha1.HelmReleaseDeletionPolicyOrphan {
+		t.Fatalf("DeletionPolicy() override = %q", got)
+	}
+}
+
+func TestValuesRequiresJSONObject(t *testing.T) {
+	t.Parallel()
+
+	item := testRelease()
+	item.Spec.Chart.Values = &apiextensionsv1.JSON{Raw: []byte(`[]`)}
+
+	if _, err := Values(item); err == nil {
+		t.Fatal("Values() error = nil, want object validation error")
+	}
+}
+
+func TestSpecHashUsesNormalizedInputs(t *testing.T) {
+	t.Parallel()
+
+	base := testRelease()
+	base.Spec.ReleaseName = ""
+	base.Spec.Namespace = ""
+	base.Spec.KubeconfigSecretRef.Key = ""
+	base.Spec.Timeout = nil
+	base.Spec.DeletionPolicy = ""
+	same := base.DeepCopy()
+	same.Spec.ReleaseName = base.Name
+	same.Spec.Namespace = DefaultNamespace
+	same.Spec.KubeconfigSecretRef.Key = DefaultKubeconfigKey
+	same.Spec.Timeout = &metav1.Duration{Duration: DefaultTimeout}
+	same.Spec.DeletionPolicy = DefaultDeletionPolicy
+
+	baseHash, err := SpecHash(base)
+	if err != nil {
+		t.Fatalf("SpecHash(base) error = %v", err)
+	}
+	sameHash, err := SpecHash(same)
+	if err != nil {
+		t.Fatalf("SpecHash(same) error = %v", err)
+	}
+	if baseHash != sameHash {
+		t.Fatalf("hash with explicit defaults = %q, want %q", sameHash, baseHash)
+	}
+
+	changed := base.DeepCopy()
+	changed.Spec.Chart.Values = &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount":3}`)}
+	changedHash, err := SpecHash(changed)
+	if err != nil {
+		t.Fatalf("SpecHash(changed) error = %v", err)
+	}
+	if changedHash == baseHash {
+		t.Fatal("SpecHash() did not change when values changed")
+	}
+}
+
+func testRelease() *omniv1alpha1.OmniHelmRelease {
+	return &omniv1alpha1.OmniHelmRelease{
+		ObjectMeta: metav1.ObjectMeta{Name: testReleaseName, Namespace: "default"},
+		Spec: omniv1alpha1.OmniHelmReleaseSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: "edge"},
+			KubeconfigSecretRef: omniv1alpha1.HelmReleaseKubeconfigSecretRef{
+				Name: "edge-kubeconfig",
+			},
+			ReleaseName: testReleaseName,
+			Namespace:   testReleaseNamespace,
+			Chart: omniv1alpha1.OmniHelmChartSpec{
+				Repository: "https://charts.example.test/",
+				Chart:      testReleaseName,
+				Version:    "1.2.3",
+				Values:     &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount":2}`)},
+			},
+		},
+	}
+}

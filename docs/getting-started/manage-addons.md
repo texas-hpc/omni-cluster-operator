@@ -4,6 +4,8 @@ Use `OmniClusterAddon` when a workload-cluster application is distributed as a H
 
 The operator uses Helm as a renderer only. It does not connect to the workload cluster, create a Helm release, run upgrade hooks, or uninstall remote objects. It renders the chart, caches the YAML in a Kubernetes Secret, and has the parent `OmniCluster` inject that rendered manifest into the Omni template.
 
+If you need Helm release history, hooks, wait behavior, upgrades, rollback-on-failure, or Helm uninstall semantics, use [`OmniHelmRelease`](../concepts/direct-helm-reconciliation.md) instead. That path requires an explicit workload-cluster kubeconfig Secret.
+
 ## How it fits
 
 `OmniClusterAddon` is an optional child resource of `OmniCluster`.
@@ -76,6 +78,7 @@ Use `full` unless you have a specific handoff plan.
 ## Operational notes
 
 - `OmniClusterAddon` is render-to-template only. It is not a remote Helm release reconciler.
+- `OmniHelmRelease` is the direct remote Helm release reconciler. It is a separate CRD because Helm release state, not Omni manifest sync, is the lifecycle source of truth.
 - Do not create another `OmniCluster.spec.kubernetes.manifests[]`, `OmniClusterAddon`, or legacy `OmniCilium` entry with the same rendered manifest name.
 - If a chart requires Talos machine configuration changes, express those explicitly in `OmniCluster.spec.patches`. Generic addons do not add Cilium-specific or chart-specific Talos patches.
 

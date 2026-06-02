@@ -25,6 +25,9 @@ resources:
 - omniclusteraddon_admin_role.yaml
 - omniclusteraddon_editor_role.yaml
 - omniclusteraddon_viewer_role.yaml
+- omnihelmrelease_admin_role.yaml
+- omnihelmrelease_editor_role.yaml
+- omnihelmrelease_viewer_role.yaml
 - omnicilium_admin_role.yaml
 - omnicilium_editor_role.yaml
 - omnicilium_viewer_role.yaml

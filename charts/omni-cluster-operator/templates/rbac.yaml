@@ -67,6 +67,7 @@ rules:
       - omniclusters
       - omniconnections
       - omnicontrolplanes
+      - omnihelmreleases
       - omnikubeconfigexports
       - omnimachines
       - omniworkers
@@ -86,6 +87,7 @@ rules:
       - omniclusters/finalizers
       - omniconnections/finalizers
       - omnicontrolplanes/finalizers
+      - omnihelmreleases/finalizers
       - omnikubeconfigexports/finalizers
       - omnimachines/finalizers
       - omniworkers/finalizers
@@ -99,6 +101,7 @@ rules:
       - omniclusters/status
       - omniconnections/status
       - omnicontrolplanes/status
+      - omnihelmreleases/status
       - omnikubeconfigexports/status
       - omnimachines/status
       - omniworkers/status

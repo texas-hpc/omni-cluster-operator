@@ -2,6 +2,7 @@
 resources:
 - omni-service-account-secret.yaml
 - omni_v1alpha1_omniclusteraddon.yaml
+- omni_v1alpha1_omnihelmrelease.yaml
 - omni_v1alpha1_omnikubeconfigexport.yaml
 - omni_v1alpha1_omnikubeconfigexport_custom_key.yaml
 - omni_v1alpha1_omniconnection.yaml
