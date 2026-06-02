@@ -13,7 +13,7 @@ Install dependencies before applying cluster resources:
 5. `OmniConnection`
 6. `OmniCluster` and child resources
 
-The default operator watches only its release namespace. Put the `OmniConnection`, `OmniCluster`, `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, `OmniClusterAddon`, legacy `OmniCilium`, and referenced Secret in that namespace unless you have changed the deployment model.
+The default operator watches only its release namespace. Put the `OmniConnection`, `OmniCluster`, `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, `OmniClusterAddon`, `OmniKubeconfigExport`, legacy `OmniCilium`, and referenced Secret in that namespace unless you have changed the deployment model.
 
 ## Secrets
 
@@ -88,6 +88,21 @@ For GitOps:
 - Do not assume deleting an addon is a complete workload-cluster uninstall.
 - Put chart-specific Talos settings, such as Cilium CNI and kube-proxy patches, in `OmniCluster.spec.patches`.
 - Treat moves from Cilium to another CNI, or from another CNI to Cilium, as staged network migrations. Use `spec.suspend` while changing CNI ownership and kube-proxy behavior.
+
+## Kubeconfig exports in GitOps
+
+`OmniKubeconfigExport` writes a workload-cluster kubeconfig Secret into the operator namespace only when the export resource exists. Keep these exports close to the automation that consumes them, and make the deletion policy explicit.
+
+For GitOps:
+
+- Do not commit exported kubeconfig Secret data.
+- Use scoped service-account users and groups instead of `system:masters`.
+- Set `ttl` and `renewBefore` so automation has time to reload the Secret before expiration.
+- Use `deletionPolicy: Delete` when the export owns the credential lifecycle.
+- Use `deletionPolicy: Orphan` only when another workflow intentionally cleans up the Secret.
+- Bind the requested user or group in the workload cluster with normal Kubernetes RBAC.
+
+If a Flux or Argo application consumes the exported Secret, order that consumer after the `OmniKubeconfigExport` resource. The export can only become ready after the referenced `OmniCluster` and its `OmniConnection` are available and Omni can issue the service-account kubeconfig.
 
 ## FluxCD notes
 

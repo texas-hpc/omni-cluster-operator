@@ -120,6 +120,7 @@ operator release namespace.
 
 - [Project documentation](https://texas-hpc.github.io/omni-cluster-operator/)
 - [Installation](https://texas-hpc.github.io/omni-cluster-operator/getting-started/installation/)
+- [Workload access](https://texas-hpc.github.io/omni-cluster-operator/getting-started/workload-access/)
 - [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
 - [Source repository](https://github.com/texas-hpc/omni-cluster-operator)
 

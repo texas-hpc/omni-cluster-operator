@@ -250,7 +250,7 @@ kubectl describe omnicluster cluster-01 \
 
 ## Access the workload cluster
 
-After Omni creates the cluster and reports the Kubernetes API as available, get workload-cluster credentials from Omni. `omni-cluster-operator` does not automatically write a child-cluster kubeconfig Secret into the management cluster.
+After Omni creates the cluster and reports the Kubernetes API as available, get workload-cluster credentials from Omni. `omni-cluster-operator` does not automatically write a child-cluster kubeconfig Secret into the management cluster unless you create an explicit `OmniKubeconfigExport`.
 
 For human access, download the kubeconfig from the Omni UI, or use `omnictl`:
 
@@ -260,19 +260,31 @@ omnictl kubeconfig --cluster <omni-cluster-name> --merge
 
 This is the normal path for interactive `kubectl` access. Access is still governed by Omni authentication and access policy.
 
-For non-interactive automation, create a Kubernetes service-account kubeconfig intentionally:
+For declarative automation, create an `OmniKubeconfigExport` in the operator namespace:
 
-```sh
-omnictl kubeconfig \
-  --cluster <omni-cluster-name> \
-  --service-account \
-  --user <kubernetes-subject> \
-  --groups <kubernetes-group> \
-  --ttl <duration> \
-  <path-to-kubeconfig>
+```yaml
+apiVersion: omni.texashpc.com/v1alpha1
+kind: OmniKubeconfigExport
+metadata:
+  name: cluster-01-automation-kubeconfig
+  namespace: omni-cluster-operator-system
+spec:
+  clusterRef:
+    name: cluster-01
+  targetSecretRef:
+    name: cluster-01-automation-kubeconfig
+  serviceAccount:
+    user: cluster-01-automation
+    groups:
+      - cluster-automation
+  ttl: 24h
+  renewBefore: 4h
+  deletionPolicy: Delete
 ```
 
-Choose the service-account subject, groups, and TTL deliberately. Do not rely on broad defaults, and store the generated kubeconfig with the same care as any bearer-token credential. This is separate from the Omni service account key used by `OmniConnection`, which authenticates this operator to Omni.
+The operator writes `data.kubeconfig` in the target Secret and rotates it before expiration when `renewBefore` is set. The `system:masters` group is rejected unless you also set `serviceAccount.allowClusterAdmin: true`.
+
+See [Workload Cluster Access](workload-access.md) for rotation, Secret shape, deletion policy, and RBAC guidance.
 
 For Talos access, download the cluster talosconfig from the Omni UI or use:
 

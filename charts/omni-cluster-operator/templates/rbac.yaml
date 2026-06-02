@@ -67,6 +67,7 @@ rules:
       - omniclusters
       - omniconnections
       - omnicontrolplanes
+      - omnikubeconfigexports
       - omnimachines
       - omniworkers
     verbs:
@@ -85,6 +86,7 @@ rules:
       - omniclusters/finalizers
       - omniconnections/finalizers
       - omnicontrolplanes/finalizers
+      - omnikubeconfigexports/finalizers
       - omnimachines/finalizers
       - omniworkers/finalizers
     verbs:
@@ -97,6 +99,7 @@ rules:
       - omniclusters/status
       - omniconnections/status
       - omnicontrolplanes/status
+      - omnikubeconfigexports/status
       - omnimachines/status
       - omniworkers/status
     verbs:

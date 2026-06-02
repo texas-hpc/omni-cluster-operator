@@ -121,6 +121,79 @@ func validateAddon(item *omniv1alpha1.OmniClusterAddon) field.ErrorList {
 	return allErrs
 }
 
+func validateKubeconfigExport(item *omniv1alpha1.OmniKubeconfigExport) field.ErrorList {
+	specPath := field.NewPath("spec")
+	var allErrs field.ErrorList
+
+	if strings.TrimSpace(item.Spec.ClusterRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("clusterRef", "name"), "clusterRef.name is required"))
+	}
+	if strings.TrimSpace(item.Spec.TargetSecretRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("targetSecretRef", "name"), "target Secret name is required"))
+	}
+	if item.Spec.TargetSecretRef.Key != "" && strings.TrimSpace(item.Spec.TargetSecretRef.Key) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("targetSecretRef", "key"), "target Secret key must not be blank"))
+	}
+	if strings.TrimSpace(item.Spec.ServiceAccount.User) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("serviceAccount", "user"), "service account user is required"))
+	}
+	if len(item.Spec.ServiceAccount.Groups) == 0 {
+		allErrs = append(allErrs, field.Required(specPath.Child("serviceAccount", "groups"), "at least one service account group is required"))
+	}
+
+	seenGroups := map[string]int{}
+	for i, group := range item.Spec.ServiceAccount.Groups {
+		itemPath := specPath.Child("serviceAccount", "groups").Index(i)
+		group = strings.TrimSpace(group)
+		if group == "" {
+			allErrs = append(allErrs, field.Required(itemPath, "service account group must not be blank"))
+			continue
+		}
+		if previous, ok := seenGroups[group]; ok {
+			allErrs = append(allErrs, field.Duplicate(itemPath, group), field.Duplicate(specPath.Child("serviceAccount", "groups").Index(previous), group))
+		}
+		seenGroups[group] = i
+		if group == omniv1alpha1.KubeconfigClusterAdminGroup && !item.Spec.ServiceAccount.AllowClusterAdmin {
+			allErrs = append(allErrs, field.Forbidden(itemPath, "system:masters requires serviceAccount.allowClusterAdmin: true"))
+		}
+	}
+
+	if item.Spec.TTL.Duration <= 0 {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("ttl"), item.Spec.TTL.String(), "ttl must be greater than zero"))
+	}
+	if item.Spec.RenewBefore != nil {
+		if item.Spec.RenewBefore.Duration <= 0 {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("renewBefore"), item.Spec.RenewBefore.String(), "renewBefore must be greater than zero"))
+		} else if item.Spec.TTL.Duration > 0 && item.Spec.RenewBefore.Duration >= item.Spec.TTL.Duration {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("renewBefore"), item.Spec.RenewBefore.String(), "renewBefore must be less than ttl"))
+		}
+	}
+
+	switch item.Spec.DeletionPolicy {
+	case omniv1alpha1.KubeconfigExportDeletionPolicyDelete, omniv1alpha1.KubeconfigExportDeletionPolicyOrphan:
+	case "":
+		allErrs = append(allErrs, field.Required(specPath.Child("deletionPolicy"), "deletionPolicy is required"))
+	default:
+		allErrs = append(allErrs, field.NotSupported(specPath.Child("deletionPolicy"), item.Spec.DeletionPolicy, []string{"Delete", "Orphan"}))
+	}
+
+	return allErrs
+}
+
+func kubeconfigExportWarnings(item *omniv1alpha1.OmniKubeconfigExport) []string {
+	if !item.Spec.ServiceAccount.AllowClusterAdmin {
+		return nil
+	}
+
+	for _, group := range item.Spec.ServiceAccount.Groups {
+		if strings.TrimSpace(group) == omniv1alpha1.KubeconfigClusterAdminGroup {
+			return []string{"system:masters exports a cluster-admin kubeconfig into the management cluster"}
+		}
+	}
+
+	return nil
+}
+
 func validateCilium(install *omniv1alpha1.OmniCilium) field.ErrorList {
 	specPath := field.NewPath("spec")
 	var allErrs field.ErrorList

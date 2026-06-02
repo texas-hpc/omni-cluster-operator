@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,8 +30,9 @@ import (
 )
 
 const (
-	validationClusterName = "edge"
-	validationWorkersName = "workers"
+	validationClusterName           = "edge"
+	validationWorkersName           = "workers"
+	validationKubeconfigExportGroup = "cluster-automation"
 )
 
 func TestOmniClusterValidation(t *testing.T) {
@@ -214,6 +216,126 @@ func TestOmniClusterAddonValidation(t *testing.T) {
 	}
 }
 
+func TestOmniKubeconfigExportValidation(t *testing.T) {
+	t.Parallel()
+
+	validator := &OmniKubeconfigExportCustomValidator{}
+	item := validKubeconfigExport()
+
+	_, err := validator.ValidateCreate(context.Background(), item)
+	if err != nil {
+		t.Fatalf("ValidateCreate() error = %v, want nil", err)
+	}
+
+	for _, tt := range []struct {
+		name      string
+		mutate    func(*omniv1alpha1.OmniKubeconfigExport)
+		wantError string
+	}{
+		{
+			name: "missing cluster ref",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.ClusterRef.Name = ""
+			},
+			wantError: "clusterRef.name is required",
+		},
+		{
+			name: "missing target secret name",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.TargetSecretRef.Name = ""
+			},
+			wantError: "target Secret name is required",
+		},
+		{
+			name: "blank target secret key",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.TargetSecretRef.Key = " "
+			},
+			wantError: "target Secret key must not be blank",
+		},
+		{
+			name: "missing service account user",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.ServiceAccount.User = ""
+			},
+			wantError: "service account user is required",
+		},
+		{
+			name: "missing service account groups",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.ServiceAccount.Groups = nil
+			},
+			wantError: "at least one service account group is required",
+		},
+		{
+			name: "blank service account group",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.ServiceAccount.Groups = []string{validationKubeconfigExportGroup, " "}
+			},
+			wantError: "service account group must not be blank",
+		},
+		{
+			name: "duplicate service account group",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.ServiceAccount.Groups = []string{validationKubeconfigExportGroup, validationKubeconfigExportGroup}
+			},
+			wantError: "Duplicate value",
+		},
+		{
+			name: "non-positive ttl",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.TTL = metav1.Duration{}
+			},
+			wantError: "ttl must be greater than zero",
+		},
+		{
+			name: "non-positive renewBefore",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.RenewBefore = &metav1.Duration{}
+			},
+			wantError: "renewBefore must be greater than zero",
+		},
+		{
+			name: "unsupported deletion policy",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.DeletionPolicy = "Retain"
+			},
+			wantError: "Unsupported value: \"Retain\"",
+		},
+	} {
+		item = validKubeconfigExport()
+		tt.mutate(item)
+		_, err = validator.ValidateCreate(context.Background(), item)
+		requireErrorContains(t, err, tt.wantError)
+	}
+
+	item = validKubeconfigExport()
+	item.Spec.ServiceAccount.Groups = []string{omniv1alpha1.KubeconfigClusterAdminGroup}
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "system:masters requires serviceAccount.allowClusterAdmin")
+
+	item = validKubeconfigExport()
+	item.Spec.ServiceAccount.Groups = []string{omniv1alpha1.KubeconfigClusterAdminGroup}
+	item.Spec.ServiceAccount.AllowClusterAdmin = true
+	warnings, err := validator.ValidateCreate(context.Background(), item)
+	if err != nil {
+		t.Fatalf("ValidateCreate() error = %v, want nil", err)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "cluster-admin kubeconfig") {
+		t.Fatalf("warnings = %#v, want cluster-admin warning", warnings)
+	}
+
+	item = validKubeconfigExport()
+	item.Spec.RenewBefore = &metav1.Duration{Duration: 24 * time.Hour}
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "renewBefore must be less than ttl")
+
+	item = validKubeconfigExport()
+	item.Spec.DeletionPolicy = ""
+	_, err = validator.ValidateCreate(context.Background(), item)
+	requireErrorContains(t, err, "deletionPolicy is required")
+}
+
 func TestOmniCiliumValidation(t *testing.T) {
 	t.Parallel()
 
@@ -290,6 +412,25 @@ func validAddon() *omniv1alpha1.OmniClusterAddon {
 				Namespace:   "kube-system",
 				Values:      &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount": 1}`)},
 			},
+		},
+	}
+}
+
+func validKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
+	return &omniv1alpha1.OmniKubeconfigExport{
+		ObjectMeta: metav1.ObjectMeta{Name: "edge-automation-kubeconfig"},
+		Spec: omniv1alpha1.OmniKubeconfigExportSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: validationClusterName},
+			TargetSecretRef: omniv1alpha1.KubeconfigTargetSecretRef{
+				Name: "edge-automation-kubeconfig",
+			},
+			ServiceAccount: omniv1alpha1.KubeconfigServiceAccountSpec{
+				User:   "edge-automation",
+				Groups: []string{validationKubeconfigExportGroup},
+			},
+			TTL:            metav1.Duration{Duration: 24 * time.Hour},
+			RenewBefore:    &metav1.Duration{Duration: 4 * time.Hour},
+			DeletionPolicy: omniv1alpha1.KubeconfigExportDeletionPolicyDelete,
 		},
 	}
 }

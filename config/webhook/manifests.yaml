@@ -110,6 +110,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-omni-texashpc-com-v1alpha1-omnikubeconfigexport
+  failurePolicy: Fail
+  name: vomnikubeconfigexport-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - omni.texashpc.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - omnikubeconfigexports
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-omni-texashpc-com-v1alpha1-omnimachine
   failurePolicy: Fail
   name: vomnimachine-v1alpha1.kb.io

@@ -241,6 +241,14 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "omniclusteraddon")
 		os.Exit(1)
 	}
+	if err := (&controller.OmniKubeconfigExportReconciler{
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		SecretReader: mgr.GetAPIReader(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "omnikubeconfigexport")
+		os.Exit(1)
+	}
 	if err := (&controller.OmniCiliumReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -258,6 +266,7 @@ func main() {
 			{name: "OmniCluster", setup: webhookv1alpha1.SetupOmniClusterWebhookWithManager},
 			{name: "OmniConnection", setup: webhookv1alpha1.SetupOmniConnectionWebhookWithManager},
 			{name: "OmniControlPlane", setup: webhookv1alpha1.SetupOmniControlPlaneWebhookWithManager},
+			{name: "OmniKubeconfigExport", setup: webhookv1alpha1.SetupOmniKubeconfigExportWebhookWithManager},
 			{name: "OmniMachine", setup: webhookv1alpha1.SetupOmniMachineWebhookWithManager},
 			{name: "OmniWorkers", setup: webhookv1alpha1.SetupOmniWorkersWebhookWithManager},
 		}

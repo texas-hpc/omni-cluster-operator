@@ -18,9 +18,11 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -39,6 +41,7 @@ import (
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 	"github.com/texas-hpc/omni-cluster-operator/internal/addon"
 	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
+	"github.com/texas-hpc/omni-cluster-operator/internal/kubeconfigexport"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 )
 
@@ -50,17 +53,23 @@ const (
 	testControlPlaneName = "edge-cp"
 	testGatewayName      = "gateway"
 	testOtherClusterName = "other"
+	testOldKubeconfigKey = "old-kubeconfig"
 )
 
 type fakeOmni struct {
-	pingErr        error
-	syncErr        error
-	statusErr      error
-	syncedTemplate []byte
-	syncOptions    []omniapi.SyncOptions
-	syncCalls      int
-	deleteCalls    []string
-	deleteOptions  []omniapi.SyncOptions
+	pingErr           error
+	syncErr           error
+	statusErr         error
+	syncedTemplate    []byte
+	syncOptions       []omniapi.SyncOptions
+	syncCalls         int
+	deleteCalls       []string
+	deleteOptions     []omniapi.SyncOptions
+	kubeconfigErr     error
+	kubeconfigData    []byte
+	kubeconfigCalls   int
+	kubeconfigCluster string
+	kubeconfigOptions []omniapi.KubeconfigOptions
 }
 
 type fakeCiliumRenderer struct {
@@ -104,6 +113,17 @@ func (f *fakeOmni) DeleteCluster(_ context.Context, _ *omniv1alpha1.OmniConnecti
 
 func (f *fakeOmni) StatusCluster(_ context.Context, _ *omniv1alpha1.OmniConnection, clusterName string) (string, error) {
 	return fmt.Sprintf("status %s", clusterName), f.statusErr
+}
+
+func (f *fakeOmni) Kubeconfig(_ context.Context, _ *omniv1alpha1.OmniConnection, clusterName string, options omniapi.KubeconfigOptions) ([]byte, error) {
+	f.kubeconfigCalls++
+	f.kubeconfigCluster = clusterName
+	f.kubeconfigOptions = append(f.kubeconfigOptions, options)
+	if f.kubeconfigData == nil {
+		f.kubeconfigData = testKubeconfigBytes("automation-token")
+	}
+
+	return append([]byte(nil), f.kubeconfigData...), f.kubeconfigErr
 }
 
 func TestOmniClusterDoesNotDestroyMachinesDuringNormalSync(t *testing.T) {
@@ -1190,6 +1210,454 @@ func TestOmniClusterWaitsForPendingCiliumRender(t *testing.T) {
 	}
 }
 
+func TestOmniKubeconfigExportWritesServiceAccountSecret(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	omni := &fakeOmni{kubeconfigData: testKubeconfigBytes("first-token")}
+	item := testKubeconfigExport()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}, &omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}).
+		WithObjects(testConnection(), testCluster(), item).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+		Omni:   omni,
+		Clock:  func() time.Time { return now },
+	}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	result, err := reconciler.Reconcile(ctx, request)
+	if err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	if result.RequeueAfter != 20*time.Hour {
+		t.Fatalf("RequeueAfter = %s, want 20h", result.RequeueAfter)
+	}
+	if omni.kubeconfigCalls != 1 {
+		t.Fatalf("kubeconfigCalls = %d, want 1", omni.kubeconfigCalls)
+	}
+	if omni.kubeconfigCluster != testClusterName {
+		t.Fatalf("kubeconfigCluster = %q, want %q", omni.kubeconfigCluster, testClusterName)
+	}
+	if len(omni.kubeconfigOptions) != 1 || omni.kubeconfigOptions[0].TTL != 24*time.Hour || omni.kubeconfigOptions[0].User != "edge-automation" || strings.Join(omni.kubeconfigOptions[0].Groups, ",") != "cluster-automation" {
+		t.Fatalf("kubeconfigOptions = %#v, want scoped service account options", omni.kubeconfigOptions)
+	}
+
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}
+	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
+		t.Fatalf("get exported Secret: %v", err)
+	}
+	if string(secret.Data[kubeconfigexport.DefaultSecretKey]) != string(testKubeconfigBytes("first-token")) {
+		t.Fatalf("Secret kubeconfig data = %q, want first-token kubeconfig", string(secret.Data[kubeconfigexport.DefaultSecretKey]))
+	}
+	if secret.Labels[kubeconfigexport.OwnerUIDLabel] != string(item.UID) {
+		t.Fatalf("owner UID label = %q, want %q", secret.Labels[kubeconfigexport.OwnerUIDLabel], item.UID)
+	}
+	if secret.Annotations[kubeconfigexport.HashAnnotation] != kubeconfigexport.Hash(testKubeconfigBytes("first-token")) {
+		t.Fatalf("hash annotation = %q, want kubeconfig hash", secret.Annotations[kubeconfigexport.HashAnnotation])
+	}
+
+	latest := &omniv1alpha1.OmniKubeconfigExport{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, latest); err != nil {
+		t.Fatalf("get export: %v", err)
+	}
+	if got := meta.FindStatusCondition(latest.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Ready condition = %#v, want True", got)
+	}
+	if latest.Status.ExpirationTime == nil || !latest.Status.ExpirationTime.Time.Equal(now.Add(24*time.Hour)) {
+		t.Fatalf("ExpirationTime = %#v, want %s", latest.Status.ExpirationTime, now.Add(24*time.Hour))
+	}
+	if latest.Status.NextRotationTime == nil || !latest.Status.NextRotationTime.Time.Equal(now.Add(20*time.Hour)) {
+		t.Fatalf("NextRotationTime = %#v, want %s", latest.Status.NextRotationTime, now.Add(20*time.Hour))
+	}
+}
+
+func TestOmniKubeconfigExportReusesCurrentSecretUntilRenewBefore(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	data := testKubeconfigBytes("current-token")
+	expirationTime := metav1.NewTime(now.Add(24 * time.Hour))
+	lastRotationTime := metav1.NewTime(now.Add(-time.Hour))
+	secret := currentKubeconfigExportSecret(t, item, data, expirationTime, lastRotationTime)
+	omni := &fakeOmni{kubeconfigData: testKubeconfigBytes("rotated-token")}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}, &omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}).
+		WithObjects(testConnection(), testCluster(), item, secret).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+		Omni:   omni,
+		Clock:  func() time.Time { return now },
+	}
+
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if omni.kubeconfigCalls != 0 {
+		t.Fatalf("kubeconfigCalls = %d, want 0", omni.kubeconfigCalls)
+	}
+	if result.RequeueAfter != 20*time.Hour {
+		t.Fatalf("RequeueAfter = %s, want 20h", result.RequeueAfter)
+	}
+
+	latest := &omniv1alpha1.OmniKubeconfigExport{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, latest); err != nil {
+		t.Fatalf("get export: %v", err)
+	}
+	if latest.Status.KubeconfigHash != kubeconfigexport.Hash(data) {
+		t.Fatalf("KubeconfigHash = %q, want current hash", latest.Status.KubeconfigHash)
+	}
+}
+
+func TestOmniKubeconfigExportRotatesWhenRenewBeforeElapsed(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	oldData := testKubeconfigBytes("old-token")
+	expirationTime := metav1.NewTime(now.Add(3 * time.Hour))
+	lastRotationTime := metav1.NewTime(now.Add(-21 * time.Hour))
+	secret := currentKubeconfigExportSecret(t, item, oldData, expirationTime, lastRotationTime)
+	omni := &fakeOmni{kubeconfigData: testKubeconfigBytes("rotated-token")}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}, &omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}).
+		WithObjects(testConnection(), testCluster(), item, secret).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+		Omni:   omni,
+		Clock:  func() time.Time { return now },
+	}
+
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if omni.kubeconfigCalls != 1 {
+		t.Fatalf("kubeconfigCalls = %d, want 1", omni.kubeconfigCalls)
+	}
+	if result.RequeueAfter != 20*time.Hour {
+		t.Fatalf("RequeueAfter = %s, want 20h", result.RequeueAfter)
+	}
+
+	updated := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}, updated); err != nil {
+		t.Fatalf("get exported Secret: %v", err)
+	}
+	if string(updated.Data[kubeconfigexport.DefaultSecretKey]) != string(testKubeconfigBytes("rotated-token")) {
+		t.Fatalf("Secret kubeconfig data was not rotated")
+	}
+}
+
+func TestOmniKubeconfigExportDeletionPolicy(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name       string
+		policy     omniv1alpha1.KubeconfigExportDeletionPolicy
+		wantSecret bool
+	}{
+		{name: "delete", policy: omniv1alpha1.KubeconfigExportDeletionPolicyDelete, wantSecret: false},
+		{name: "orphan", policy: omniv1alpha1.KubeconfigExportDeletionPolicyOrphan, wantSecret: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			item := testKubeconfigExport()
+			item.Spec.DeletionPolicy = tt.policy
+			item.Finalizers = []string{omniv1alpha1.Finalizer}
+			deletionTime := metav1.Now()
+			item.DeletionTimestamp = &deletionTime
+			secret := currentKubeconfigExportSecret(t, item, testKubeconfigBytes("delete-token"), metav1.NewTime(time.Now().Add(time.Hour)), metav1.Now())
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
+				WithObjects(item, secret).
+				Build()
+			reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient, Scheme: scheme}
+
+			if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+
+			gotSecret := &corev1.Secret{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}, gotSecret)
+			if tt.wantSecret && err != nil {
+				t.Fatalf("get orphaned Secret: %v", err)
+			}
+			if !tt.wantSecret && !apierrors.IsNotFound(err) {
+				t.Fatalf("deleted Secret get error = %v, want NotFound", err)
+			}
+		})
+	}
+}
+
+func TestOmniKubeconfigExportReportsMissingDependencies(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name       string
+		objects    []client.Object
+		wantReason string
+	}{
+		{
+			name:       "missing cluster",
+			objects:    []client.Object{testConnection()},
+			wantReason: omniv1alpha1.ReasonMissingCluster,
+		},
+		{
+			name:       "missing connection",
+			objects:    []client.Object{testCluster()},
+			wantReason: omniv1alpha1.ReasonMissingConnection,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			item := testKubeconfigExport()
+			item.Finalizers = []string{omniv1alpha1.Finalizer}
+			objects := append([]client.Object{item}, tt.objects...)
+			omni := &fakeOmni{}
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
+				WithObjects(objects...).
+				Build()
+			reconciler := &OmniKubeconfigExportReconciler{
+				Client: k8sClient,
+				Scheme: scheme,
+				Omni:   omni,
+			}
+
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if result.RequeueAfter != kubeconfigExportRetryInterval {
+				t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, kubeconfigExportRetryInterval)
+			}
+			if omni.kubeconfigCalls != 0 {
+				t.Fatalf("kubeconfigCalls = %d, want 0", omni.kubeconfigCalls)
+			}
+
+			latest := &omniv1alpha1.OmniKubeconfigExport{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, latest); err != nil {
+				t.Fatalf("get export: %v", err)
+			}
+			ready := meta.FindStatusCondition(latest.Status.Conditions, omniv1alpha1.ConditionReady)
+			if ready == nil || ready.Status != metav1.ConditionFalse || ready.Reason != tt.wantReason {
+				t.Fatalf("Ready condition = %#v, want False/%s", ready, tt.wantReason)
+			}
+			if latest.Status.TargetSecretRef != item.Spec.TargetSecretRef.Name {
+				t.Fatalf("TargetSecretRef status = %q, want %q", latest.Status.TargetSecretRef, item.Spec.TargetSecretRef.Name)
+			}
+
+			secret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}, secret)
+			if !apierrors.IsNotFound(err) {
+				t.Fatalf("target Secret get error = %v, want NotFound", err)
+			}
+		})
+	}
+}
+
+func TestOmniKubeconfigExportReportsExportFailures(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name string
+		omni *fakeOmni
+	}{
+		{
+			name: "omni error",
+			omni: &fakeOmni{kubeconfigErr: errors.New("omni unavailable")},
+		},
+		{
+			name: "invalid kubeconfig",
+			omni: &fakeOmni{kubeconfigData: []byte("apiVersion: v1\nkind: Config\nusers: [")},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			item := testKubeconfigExport()
+			item.Finalizers = []string{omniv1alpha1.Finalizer}
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
+				WithObjects(testConnection(), testCluster(), item).
+				Build()
+			reconciler := &OmniKubeconfigExportReconciler{
+				Client: k8sClient,
+				Scheme: scheme,
+				Omni:   tt.omni,
+			}
+
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+			if err == nil {
+				t.Fatal("Reconcile() error = nil, want export error")
+			}
+			if result.RequeueAfter != kubeconfigExportRetryInterval {
+				t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, kubeconfigExportRetryInterval)
+			}
+			if tt.omni.kubeconfigCalls != 1 {
+				t.Fatalf("kubeconfigCalls = %d, want 1", tt.omni.kubeconfigCalls)
+			}
+
+			latest := &omniv1alpha1.OmniKubeconfigExport{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, latest); err != nil {
+				t.Fatalf("get export: %v", err)
+			}
+			ready := meta.FindStatusCondition(latest.Status.Conditions, omniv1alpha1.ConditionReady)
+			if ready == nil || ready.Status != metav1.ConditionFalse || ready.Reason != omniv1alpha1.ReasonExportFailed {
+				t.Fatalf("Ready condition = %#v, want False/%s", ready, omniv1alpha1.ReasonExportFailed)
+			}
+
+			secret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}, secret)
+			if !apierrors.IsNotFound(err) {
+				t.Fatalf("target Secret get error = %v, want NotFound", err)
+			}
+		})
+	}
+}
+
+func TestOmniKubeconfigExportCleansPreviousOwnedTargetSecret(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	item.Status.TargetSecretRef = testOldKubeconfigKey
+	oldSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testOldKubeconfigKey,
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				kubeconfigexport.OwnerUIDLabel: string(item.UID),
+			},
+			Annotations: map[string]string{
+				kubeconfigexport.OwnerAnnotation: item.Name,
+			},
+		},
+		Data: map[string][]byte{
+			kubeconfigexport.DefaultSecretKey: testKubeconfigBytes("old-token"),
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
+		WithObjects(testConnection(), testCluster(), item, oldSecret).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+		Omni:   &fakeOmni{kubeconfigData: testKubeconfigBytes("new-token")},
+		Clock:  func() time.Time { return now },
+	}
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: testOldKubeconfigKey}, &corev1.Secret{})
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("old Secret get error = %v, want NotFound", err)
+	}
+	newSecret := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}, newSecret); err != nil {
+		t.Fatalf("get new Secret: %v", err)
+	}
+	if string(newSecret.Data[kubeconfigexport.DefaultSecretKey]) != string(testKubeconfigBytes("new-token")) {
+		t.Fatal("new Secret does not contain rotated kubeconfig")
+	}
+}
+
+func TestOmniKubeconfigExportRemovesPreviousKeyInOwnedSecret(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	item.Status.TargetSecretRef = item.Spec.TargetSecretRef.Name
+	item.Status.TargetSecretKey = testOldKubeconfigKey
+	item.Spec.TargetSecretRef.Key = "new-kubeconfig"
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      item.Spec.TargetSecretRef.Name,
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				kubeconfigexport.OwnerUIDLabel: string(item.UID),
+			},
+			Annotations: map[string]string{
+				kubeconfigexport.OwnerAnnotation: item.Name,
+			},
+		},
+		Data: map[string][]byte{
+			testOldKubeconfigKey: testKubeconfigBytes("old-token"),
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
+		WithObjects(testConnection(), testCluster(), item, secret).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Scheme: scheme,
+		Omni:   &fakeOmni{kubeconfigData: testKubeconfigBytes("new-token")},
+		Clock:  func() time.Time { return now },
+	}
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}, updated); err != nil {
+		t.Fatalf("get Secret: %v", err)
+	}
+	if _, ok := updated.Data[testOldKubeconfigKey]; ok {
+		t.Fatal("old key is still present")
+	}
+	if string(updated.Data["new-kubeconfig"]) != string(testKubeconfigBytes("new-token")) {
+		t.Fatal("new key does not contain exported kubeconfig")
+	}
+}
+
 func TestSpecOrDeletionChangedPredicateIgnoresStatusOnlyUpdates(t *testing.T) {
 	t.Parallel()
 
@@ -1301,6 +1769,57 @@ func TestClusterWatchRequestMapping(t *testing.T) {
 	requests := reconciler.clustersForConnection(ctx, testConnection())
 	if len(requests) != 1 || requests[0].Name != testClusterName {
 		t.Fatalf("clustersForConnection() = %#v, want cluster %q", requests, testClusterName)
+	}
+}
+
+func TestKubeconfigExportWatchRequestMapping(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	item := testKubeconfigExport()
+	other := testKubeconfigExport()
+	other.Name = "other-kubeconfig"
+	other.Spec.ClusterRef.Name = testOtherClusterName
+	otherCluster := &omniv1alpha1.OmniCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: testOtherClusterName, Namespace: testNamespace},
+		Spec: omniv1alpha1.OmniClusterSpec{
+			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "other-omni"},
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(testCluster(), otherCluster, item, other).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient, Scheme: scheme}
+
+	clusterRequests := kubeconfigExportRequestsForCluster(ctx, k8sClient, testCluster())
+	if len(clusterRequests) != 1 || clusterRequests[0].Name != item.Name {
+		t.Fatalf("kubeconfigExportRequestsForCluster() = %#v, want %q", clusterRequests, item.Name)
+	}
+
+	connectionRequests := reconciler.kubeconfigExportRequestsForConnection(ctx, testConnection())
+	if len(connectionRequests) != 1 || connectionRequests[0].Name != item.Name {
+		t.Fatalf("kubeconfigExportRequestsForConnection() = %#v, want %q", connectionRequests, item.Name)
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      item.Spec.TargetSecretRef.Name,
+			Namespace: item.Namespace,
+			Annotations: map[string]string{
+				kubeconfigexport.OwnerAnnotation: item.Name,
+			},
+		},
+	}
+	secretRequests := kubeconfigExportRequestsForSecret(ctx, secret)
+	if len(secretRequests) != 1 || secretRequests[0].Name != item.Name {
+		t.Fatalf("kubeconfigExportRequestsForSecret() = %#v, want %q", secretRequests, item.Name)
+	}
+	unannotated := secret.DeepCopy()
+	unannotated.Annotations = nil
+	if requests := kubeconfigExportRequestsForSecret(ctx, unannotated); len(requests) != 0 {
+		t.Fatalf("kubeconfigExportRequestsForSecret(unannotated) = %#v, want none", requests)
 	}
 }
 
@@ -1496,6 +2015,71 @@ func testAddon() *omniv1alpha1.OmniClusterAddon {
 				ReleaseName: "metrics-server",
 				Namespace:   "kube-system",
 			},
+		},
+	}
+}
+
+func testKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
+	return &omniv1alpha1.OmniKubeconfigExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "edge-automation-kubeconfig",
+			Namespace: testNamespace,
+			UID:       "11111111-1111-4111-8111-111111111111",
+		},
+		Spec: omniv1alpha1.OmniKubeconfigExportSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
+			TargetSecretRef: omniv1alpha1.KubeconfigTargetSecretRef{
+				Name: "edge-automation-kubeconfig",
+			},
+			ServiceAccount: omniv1alpha1.KubeconfigServiceAccountSpec{
+				User:   "edge-automation",
+				Groups: []string{"cluster-automation"},
+			},
+			TTL:            metav1.Duration{Duration: 24 * time.Hour},
+			RenewBefore:    &metav1.Duration{Duration: 4 * time.Hour},
+			DeletionPolicy: omniv1alpha1.KubeconfigExportDeletionPolicyDelete,
+		},
+	}
+}
+
+func testKubeconfigBytes(token string) []byte {
+	return fmt.Appendf(nil, `apiVersion: v1
+kind: Config
+clusters:
+- name: edge
+  cluster:
+    server: https://edge.example.test
+contexts:
+- name: edge
+  context:
+    cluster: edge
+    user: automation
+current-context: edge
+users:
+- name: automation
+  user:
+    token: %s
+`, token)
+}
+
+func currentKubeconfigExportSecret(t *testing.T, item *omniv1alpha1.OmniKubeconfigExport, data []byte, expirationTime, lastRotationTime metav1.Time) *corev1.Secret {
+	t.Helper()
+
+	specHash, err := kubeconfigexport.SpecHash(item, testClusterName)
+	if err != nil {
+		t.Fatalf("SpecHash() error = %v", err)
+	}
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        item.Spec.TargetSecretRef.Name,
+			Namespace:   item.Namespace,
+			Labels:      kubeconfigexport.SecretLabels(item, testClusterName),
+			Annotations: kubeconfigexport.SecretAnnotations(item, specHash, kubeconfigexport.Hash(data), expirationTime, lastRotationTime),
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			kubeconfigexport.TargetSecretKey(item): data,
 		},
 	}
 }

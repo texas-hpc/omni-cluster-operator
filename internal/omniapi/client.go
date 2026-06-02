@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	cosiresource "github.com/cosi-project/runtime/pkg/resource"
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	omniclient "github.com/siderolabs/omni/client/pkg/client"
+	"github.com/siderolabs/omni/client/pkg/client/management"
 	"github.com/siderolabs/omni/client/pkg/omni/resources"
 	omniresources "github.com/siderolabs/omni/client/pkg/omni/resources/omni"
 	omnioperations "github.com/siderolabs/omni/client/pkg/template/operations"
@@ -42,11 +44,19 @@ type Client interface {
 	SyncTemplate(ctx context.Context, connection *omniv1alpha1.OmniConnection, templateBytes []byte, templateRoot string, options SyncOptions) (string, error)
 	DeleteCluster(ctx context.Context, connection *omniv1alpha1.OmniConnection, clusterName string, options SyncOptions) (string, error)
 	StatusCluster(ctx context.Context, connection *omniv1alpha1.OmniConnection, clusterName string) (string, error)
+	Kubeconfig(ctx context.Context, connection *omniv1alpha1.OmniConnection, clusterName string, options KubeconfigOptions) ([]byte, error)
 }
 
 // SyncOptions are remote Omni sync/delete options.
 type SyncOptions struct {
 	DestroyMachines bool
+}
+
+// KubeconfigOptions are Omni workload-cluster service-account kubeconfig options.
+type KubeconfigOptions struct {
+	TTL    time.Duration
+	User   string
+	Groups []string
 }
 
 // RealClient uses Sidero's Omni Go client.
@@ -138,6 +148,27 @@ func (c *RealClient) StatusCluster(ctx context.Context, connection *omniv1alpha1
 	}
 
 	return out.String(), nil
+}
+
+// Kubeconfig retrieves a service-account kubeconfig for an Omni workload cluster.
+func (c *RealClient) Kubeconfig(ctx context.Context, connection *omniv1alpha1.OmniConnection, clusterName string, options KubeconfigOptions) ([]byte, error) {
+	omniClient, err := c.newOmniClient(ctx, connection)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = omniClient.Close()
+	}()
+
+	data, err := omniClient.Management().WithCluster(clusterName).Kubeconfig(ctx, management.WithServiceAccount(options.TTL, options.User, options.Groups...))
+	if err != nil {
+		return nil, fmt.Errorf("get kubeconfig for Omni cluster %q: %w", clusterName, err)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("get kubeconfig for Omni cluster %q: response was empty", clusterName)
+	}
+
+	return data, nil
 }
 
 func (c *RealClient) newOmniClient(ctx context.Context, connection *omniv1alpha1.OmniConnection) (*omniclient.Client, error) {
