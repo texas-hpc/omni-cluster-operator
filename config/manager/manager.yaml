@@ -70,6 +70,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: HELM_CACHE_HOME
+          value: /tmp/omni-cluster-operator/helm/cache
+        - name: HELM_CONFIG_HOME
+          value: /tmp/omni-cluster-operator/helm/config
+        - name: HELM_DATA_HOME
+          value: /tmp/omni-cluster-operator/helm/data
         ports:
         - containerPort: 8081
           name: health
@@ -101,7 +107,11 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-        volumeMounts: []
-      volumes: []
+        volumeMounts:
+        - mountPath: /tmp/omni-cluster-operator
+          name: helm-cache
+      volumes:
+      - name: helm-cache
+        emptyDir: {}
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

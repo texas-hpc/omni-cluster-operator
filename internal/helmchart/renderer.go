@@ -101,14 +101,23 @@ func (r Renderer) Settings() (*cli.EnvSettings, error) {
 	if cacheDir == "" {
 		cacheDir = filepath.Join(os.TempDir(), "omni-cluster-operator", "helm")
 	}
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	cacheHome := filepath.Join(cacheDir, "cache")
+	configHome := filepath.Join(cacheDir, "config")
+	if err := os.MkdirAll(filepath.Join(cacheHome, "content"), 0755); err != nil {
 		return nil, fmt.Errorf("create Helm cache directory %q: %w", cacheDir, err)
+	}
+	if err := os.MkdirAll(filepath.Join(cacheHome, "repository"), 0755); err != nil {
+		return nil, fmt.Errorf("create Helm repository cache directory %q: %w", cacheDir, err)
+	}
+	if err := os.MkdirAll(filepath.Join(configHome, "registry"), 0755); err != nil {
+		return nil, fmt.Errorf("create Helm config directory %q: %w", cacheDir, err)
 	}
 
 	settings := cli.New()
-	settings.RepositoryCache = cacheDir
-	settings.RepositoryConfig = filepath.Join(cacheDir, "repositories.yaml")
-	settings.RegistryConfig = filepath.Join(cacheDir, "registry.json")
+	settings.RepositoryCache = filepath.Join(cacheHome, "repository")
+	settings.ContentCache = filepath.Join(cacheHome, "content")
+	settings.RepositoryConfig = filepath.Join(configHome, "repositories.yaml")
+	settings.RegistryConfig = filepath.Join(configHome, "registry", "config.json")
 
 	return settings, nil
 }
