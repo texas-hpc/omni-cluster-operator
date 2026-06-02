@@ -7,7 +7,7 @@ Use these resources to manage the full Omni cluster template lifecycle from Kube
 - Pause remote sync while preparing a larger change.
 - Delete the remote Omni cluster or orphan it intentionally.
 
-Create one `OmniConnection`, one `OmniCluster`, and exactly one `OmniControlPlane` for each cluster. Add `OmniWorkers`, `OmniMachine`, and `OmniClusterAddon` only when the cluster needs them. Add `OmniHelmRelease` only after you have an explicit workload-cluster kubeconfig Secret for direct Helm reconciliation.
+Create one `OmniConnection`, one `OmniCluster`, and exactly one `OmniControlPlane` for each cluster. Add `OmniWorkers` and `OmniMachine` only when the cluster needs them. Add `OmniKubeconfigExport` to create and export a workload-cluster kubeconfig Secret. Add `OmniHelmRelease` only after the exported kubeconfig Secret is available for direct Helm reconciliation.
 
 If you do not create any workers, configure Talos to allow workloads on the control plane nodes.
 
@@ -22,7 +22,8 @@ omni-cluster-operator/
       control-plane.yaml
       workers.yaml
       machines.yaml
-      addons.yaml
+      workload-access.yaml
+      helm-releases.yaml
     cluster-02/
       cluster.yaml
       control-plane.yaml
@@ -38,7 +39,7 @@ The examples below use static Omni machine IDs. Replace the endpoint, versions, 
 
 `OmniCluster` is the resource with remote side effects. It selects the shared `OmniConnection`, gathers child resources by `spec.clusterRef.name`, renders one Omni cluster template, validates it with Omni's public client code, syncs it to Omni, and reports status back through Kubernetes conditions.
 
-Child template resources do not talk to Omni directly. Updating an `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, or `OmniClusterAddon` causes the parent `OmniCluster` to render and sync a new template. `OmniHelmRelease` is different: it uses an explicit workload-cluster kubeconfig Secret and reconciles Helm directly after the workload cluster exists.
+Child template resources do not talk to Omni directly. Updating an `OmniControlPlane`, `OmniWorkers`, or `OmniMachine` causes the parent `OmniCluster` to render and sync a new template. Cluster-level patches and raw managed manifests live on `OmniCluster` itself. `OmniHelmRelease` is different: it uses an explicit workload-cluster kubeconfig Secret and reconciles Helm directly after the workload cluster exists.
 
 ```mermaid
 flowchart LR
@@ -47,7 +48,6 @@ flowchart LR
   ControlPlane["OmniControlPlane"] --> Cluster
   Workers["OmniWorkers"] --> Cluster
   Machine["OmniMachine"] --> Cluster
-  Addon["OmniClusterAddon"] --> Cluster
   Export["OmniKubeconfigExport"] --> HelmRelease["OmniHelmRelease"]
   Export --> Cluster
   HelmRelease --> Cluster
@@ -138,9 +138,33 @@ spec:
     - 22222222-2222-4222-8222-222222222222
 ```
 
-## Optional: install Cilium
+## Optional: add Omni-managed manifests
 
-Use `OmniClusterAddon` when the cluster should manage Cilium through Omni manifest sync. See [Manage Cilium](install-cilium.md) for the Cilium-specific Talos patches and migration behavior.
+Use `OmniCluster.spec.kubernetes.manifests` when Omni should apply raw Kubernetes YAML through the cluster template. This is a good fit for small prerequisites such as namespaces, labels, or other manifest-sync resources that should be part of Omni template ownership.
+
+```yaml
+apiVersion: omni.texashpc.com/v1alpha1
+kind: OmniCluster
+metadata:
+  name: cluster-01
+  namespace: omni-cluster-operator-system
+spec:
+  connectionRef:
+    name: omni
+  kubernetes:
+    version: v1.35.0
+    manifests:
+      - name: platform-namespace
+        inline:
+          - apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: platform
+  talos:
+    version: v1.13.2
+```
+
+Use `OmniHelmRelease` instead when you want Helm release history, upgrades, status, and uninstall behavior in the workload cluster.
 
 ## Optional: use machine classes
 
@@ -308,7 +332,7 @@ Common updates include:
 - Add or remove an `OmniWorkers` resource.
 - Change worker set `spec.machineClass.size` or explicit `spec.machines`.
 - Add or edit an `OmniMachine` for per-node install disk, patches, extensions, or kernel args.
-- Add or edit an `OmniClusterAddon` resource for Helm-rendered manifest management.
+- Add or edit `OmniCluster.spec.kubernetes.manifests` for raw Omni-managed Kubernetes manifests.
 - Add or edit an `OmniHelmRelease` resource for direct Helm reconciliation using an explicit workload-cluster kubeconfig Secret.
 
 Example version update:

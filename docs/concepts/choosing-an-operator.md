@@ -24,12 +24,12 @@ It intentionally does not replace Omni's cluster-template behavior. The operator
 This is a good fit when:
 
 - Omni owns machine inventory, assignment, SideroLink connectivity, and cluster lifecycle.
-- You want cluster settings, control planes, workers, static machines, and optional Helm-rendered addons expressed as Kubernetes resources.
+- You want cluster settings, control planes, workers, static machines, workload kubeconfig exports, and direct Helm releases expressed as Kubernetes resources.
 - Your platform workflow already treats Omni as the source of truth for Talos cluster creation.
 
 ## How talos-operator fits
 
-`talos-operator` is a direct Talos lifecycle operator. Its documentation describes Kubernetes resources for Talos clusters, control planes, workers, machines, etcd backups, backup schedules, and cluster addons. It also documents metal and container modes for running Talos on machines in maintenance mode or as containerized Talos instances.
+`talos-operator` is a direct Talos lifecycle operator. Its documentation describes Kubernetes resources for Talos clusters, control planes, workers, machines, etcd backups, backup schedules, and Kubernetes manifest installation. It also documents metal and container modes for running Talos on machines in maintenance mode or as containerized Talos instances.
 
 That is a good fit when:
 

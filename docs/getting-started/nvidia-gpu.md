@@ -161,7 +161,7 @@ Kubernetes normally does not need separate runtime classes for the two driver fa
 
 For Talos 1.13 and newer, use the NVIDIA GPU Operator rather than installing a separate legacy chart. Talos supplies the NVIDIA driver and container toolkit through system extensions, so disable those GPU Operator components.
 
-Use `OmniClusterAddon` to render the GPU Operator chart into the Omni cluster template. Keep the namespace as a small Omni-managed prerequisite on the parent cluster, because Helm's namespace setting does not create or label the namespace.
+Use `OmniHelmRelease` to install the GPU Operator into the Omni-created workload cluster. Keep the namespace as a small Omni-managed prerequisite on the parent cluster, because Helm's namespace setting does not create or label the namespace with the privileged Pod Security Admission mode the GPU Operator needs.
 
 Add this manifest entry to the `OmniCluster` that owns the GPU worker set:
 
@@ -189,25 +189,50 @@ spec:
     version: v1.13.2
 ```
 
-Then create the addon in the same namespace as the parent `OmniCluster`:
+Then export a scoped workload-cluster kubeconfig Secret in the same namespace as the parent `OmniCluster`:
 
 ```yaml
 apiVersion: omni.texashpc.com/v1alpha1
-kind: OmniClusterAddon
+kind: OmniKubeconfigExport
+metadata:
+  name: cluster-01-gpu-operator-kubeconfig
+  namespace: omni-cluster-operator-system
+spec:
+  clusterRef:
+    name: cluster-01
+  targetSecretRef:
+    name: cluster-01-gpu-operator-kubeconfig
+  serviceAccount:
+    user: cluster-01-gpu-operator
+    groups:
+      - gpu-operator-installers
+  ttl: 24h
+  renewBefore: 4h
+  deletionPolicy: Delete
+```
+
+Bind that exported user or group in the workload cluster with the permissions the GPU Operator chart needs. Then create the direct Helm release:
+
+```yaml
+apiVersion: omni.texashpc.com/v1alpha1
+kind: OmniHelmRelease
 metadata:
   name: cluster-01-gpu-operator
   namespace: omni-cluster-operator-system
 spec:
   clusterRef:
     name: cluster-01
-  manifestName: gpu-operator
-  mode: full
-  helm:
+  kubeconfigSecretRef:
+    name: cluster-01-gpu-operator-kubeconfig
+  releaseName: gpu-operator
+  namespace: gpu-operator
+  wait: true
+  timeout: 10m
+  deletionPolicy: Uninstall
+  chart:
     repository: https://helm.ngc.nvidia.com/nvidia
     chart: gpu-operator
     version: <gpu-operator-chart-version>
-    releaseName: gpu-operator
-    namespace: gpu-operator
     values:
       driver:
         enabled: false
@@ -219,9 +244,7 @@ spec:
 
 Use NVIDIA's GPU Operator documentation and the [NVIDIA GPU Operator repository](https://github.com/NVIDIA/gpu-operator) to choose the chart version and any additional values for your cluster. Pin that chart version in production rather than relying on the latest chart at reconcile time.
 
-The addon controller renders the chart and the parent `OmniCluster` syncs the rendered objects through Omni. Do not also install the GPU Operator as a separate workload-cluster Helm release unless you intentionally want Flux, Argo CD, or another release manager to own it instead of Omni template sync.
-
-If you choose a workload-cluster Helm release instead, run `helm upgrade --install` against the Omni-created workload cluster, not the management cluster where `omni-cluster-operator` is installed. See [Access the workload cluster](create-a-cluster.md#access-the-workload-cluster) if you need to download the child-cluster kubeconfig first.
+The direct Helm controller runs Helm against the Omni-created workload cluster, not the management cluster where `omni-cluster-operator` is installed. Do not also install the GPU Operator through Flux, Argo CD, or manual Helm unless you intentionally want that tool to own the release instead.
 
 ## Runtime behavior
 

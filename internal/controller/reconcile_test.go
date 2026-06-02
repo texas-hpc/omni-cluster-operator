@@ -25,7 +25,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,8 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
-	"github.com/texas-hpc/omni-cluster-operator/internal/addon"
-	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
 	"github.com/texas-hpc/omni-cluster-operator/internal/helmrelease"
 	"github.com/texas-hpc/omni-cluster-operator/internal/kubeconfigexport"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
@@ -52,7 +49,6 @@ const (
 	testMachineName      = "node-1"
 	testWorkersName      = "workers"
 	testControlPlaneName = "edge-cp"
-	testGatewayName      = "gateway"
 	testOtherClusterName = "other"
 	testOldKubeconfigKey = "old-kubeconfig"
 	testHelmReleaseName  = "metrics-server"
@@ -76,18 +72,6 @@ type fakeOmni struct {
 	kubeconfigOptions []omniapi.KubeconfigOptions
 }
 
-type fakeCiliumRenderer struct {
-	manifest []byte
-	calls    int
-	err      error
-}
-
-type fakeAddonRenderer struct {
-	manifest []byte
-	calls    int
-	err      error
-}
-
 type fakeHelmReleaseClient struct {
 	reconcileResult  *helmrelease.Result
 	reconcileErr     error
@@ -98,16 +82,6 @@ type fakeHelmReleaseClient struct {
 	uninstallErr     error
 	uninstallCalls   int
 	uninstallConfigs [][]byte
-}
-
-func (f *fakeCiliumRenderer) Render(context.Context, *omniv1alpha1.OmniCilium) ([]byte, bool, error) {
-	f.calls++
-	return append([]byte(nil), f.manifest...), true, f.err
-}
-
-func (f *fakeAddonRenderer) Render(context.Context, *omniv1alpha1.OmniClusterAddon) ([]byte, error) {
-	f.calls++
-	return append([]byte(nil), f.manifest...), f.err
 }
 
 func (f *fakeHelmReleaseClient) Reconcile(_ context.Context, _ *omniv1alpha1.OmniHelmRelease, kubeconfig []byte) (*helmrelease.Result, error) {
@@ -254,179 +228,6 @@ func TestOmniClusterReconcilesTemplateToOmni(t *testing.T) {
 	}
 	if cluster.Status.ClusterName != testClusterName {
 		t.Fatalf("ClusterName = %q, want edge", cluster.Status.ClusterName)
-	}
-}
-
-func TestOmniClusterIncludesRenderedCiliumManifest(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	omni := &fakeOmni{}
-	install := testCilium()
-	specHash, err := cilium.SpecHash(install)
-	if err != nil {
-		t.Fatalf("SpecHash() error = %v", err)
-	}
-	manifest := []byte(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: kube-system
-`)
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cilium.RenderedManifestSecretName(install),
-			Namespace: testNamespace,
-			Labels:    cilium.RenderedManifestLabels(install),
-			Annotations: map[string]string{
-				cilium.RenderedManifestSpecHashKey: specHash,
-				cilium.RenderedManifestHashKey:     cilium.RenderedManifestHash(manifest),
-			},
-		},
-		Data: map[string][]byte{
-			cilium.RenderedManifestSecretKey: manifest,
-		},
-	}
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniCilium{}).
-		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), install, secret).
-		Build()
-
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-
-	rendered := string(omni.syncedTemplate)
-	for _, want := range []string{
-		"name: cilium",
-		"disable-default-cni-for-cilium",
-		"kind: Namespace",
-		"disabled: true",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("rendered template missing %q:\n%s", want, rendered)
-		}
-	}
-
-	cluster := &omniv1alpha1.OmniCluster{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
-		t.Fatalf("get cluster: %v", err)
-	}
-	if cluster.Status.CiliumRef != install.Name {
-		t.Fatalf("CiliumRef = %q, want %q", cluster.Status.CiliumRef, install.Name)
-	}
-}
-
-func TestOmniClusterIncludesRenderedAddonManifests(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	omni := &fakeOmni{}
-	metrics := testAddon()
-	gateway := testAddon()
-	gateway.Name = testGatewayName
-	gateway.Spec.ManifestName = testGatewayName
-	gateway.Spec.Helm.Chart = testGatewayName
-	gateway.Spec.Helm.ReleaseName = testGatewayName
-	gateway.Spec.Helm.Namespace = "gateway-system"
-
-	metricsSecret := currentAddonSecret(t, metrics, []byte(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: metrics
-`))
-	gatewaySecret := currentAddonSecret(t, gateway, []byte(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: gateway-system
-`))
-
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniClusterAddon{}).
-		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), metrics, gateway, metricsSecret, gatewaySecret).
-		Build()
-
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-
-	rendered := string(omni.syncedTemplate)
-	for _, want := range []string{
-		"\n    - name: gateway\n",
-		"name: metrics",
-		"kind: Namespace",
-		"gateway-system",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("synced template missing %q:\n%s", want, rendered)
-		}
-	}
-
-	cluster := &omniv1alpha1.OmniCluster{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
-		t.Fatalf("get cluster: %v", err)
-	}
-	if got, want := strings.Join(cluster.Status.AddonRefs, ","), testGatewayName+",metrics-addon"; got != want {
-		t.Fatalf("AddonRefs = %q, want %q", got, want)
-	}
-}
-
-func TestOmniClusterIncludesEmptyRenderedAddonManifest(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	omni := &fakeOmni{}
-	item := testAddon()
-	secret := currentAddonSecret(t, item, nil)
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniClusterAddon{}).
-		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), item, secret).
-		Build()
-
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-
-	rendered := string(omni.syncedTemplate)
-	for _, want := range []string{
-		"name: metrics",
-		"inline: []",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("synced template missing %q:\n%s", want, rendered)
-		}
-	}
-
-	cluster := &omniv1alpha1.OmniCluster{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
-		t.Fatalf("get cluster: %v", err)
-	}
-	if got, want := strings.Join(cluster.Status.AddonRefs, ","), "metrics-addon"; got != want {
-		t.Fatalf("AddonRefs = %q, want %q", got, want)
 	}
 }
 
@@ -889,376 +690,6 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 				t.Fatalf("Reachable condition = %#v, want status %s reason %s", reachable, tt.wantStatus, tt.wantReason)
 			}
 		})
-	}
-}
-
-func TestOmniCiliumCachesRenderedManifest(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	renderer := &fakeCiliumRenderer{
-		manifest: []byte(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: kube-system
-`),
-	}
-	install := testCilium()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCilium{}).
-		WithObjects(testCluster(), install).
-		Build()
-
-	reconciler := &OmniCiliumReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: install.Name}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-	firstStatus := &omniv1alpha1.OmniCilium{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, firstStatus); err != nil {
-		t.Fatalf("get cilium after first reconcile: %v", err)
-	}
-	if firstStatus.Status.LastRenderTime == nil {
-		t.Fatal("LastRenderTime is nil after render")
-	}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-
-	if renderer.calls != 1 {
-		t.Fatalf("renderer calls = %d, want 1", renderer.calls)
-	}
-
-	secret := &corev1.Secret{}
-	secretKey := types.NamespacedName{Namespace: testNamespace, Name: cilium.RenderedManifestSecretName(install)}
-	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
-		t.Fatalf("get rendered manifest secret: %v", err)
-	}
-	if len(secret.Data[cilium.RenderedManifestSecretKey]) == 0 {
-		t.Fatal("rendered manifest secret is empty")
-	}
-
-	updated := &omniv1alpha1.OmniCilium{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-		t.Fatalf("get cilium: %v", err)
-	}
-	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
-		t.Fatalf("Ready condition = %#v, want True", got)
-	}
-	if updated.Status.LastRenderTime == nil || !updated.Status.LastRenderTime.Equal(firstStatus.Status.LastRenderTime) {
-		t.Fatalf("LastRenderTime = %v, want cache hit to preserve %v", updated.Status.LastRenderTime, firstStatus.Status.LastRenderTime)
-	}
-}
-
-func TestOmniClusterAddonCachesRenderedManifest(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	renderer := &fakeAddonRenderer{
-		manifest: []byte(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: metrics
-`),
-	}
-	item := testAddon()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniClusterAddon{}).
-		WithObjects(testCluster(), item).
-		Build()
-
-	reconciler := &OmniClusterAddonReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-	firstStatus := &omniv1alpha1.OmniClusterAddon{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, firstStatus); err != nil {
-		t.Fatalf("get addon after first reconcile: %v", err)
-	}
-	if firstStatus.Status.LastRenderTime == nil {
-		t.Fatal("LastRenderTime is nil after render")
-	}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-
-	if renderer.calls != 1 {
-		t.Fatalf("renderer calls = %d, want 1", renderer.calls)
-	}
-
-	secret := &corev1.Secret{}
-	secretKey := types.NamespacedName{Namespace: testNamespace, Name: addon.RenderedManifestSecretName(item)}
-	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
-		t.Fatalf("get rendered manifest secret: %v", err)
-	}
-	if len(secret.Data[addon.RenderedManifestSecretKey]) == 0 {
-		t.Fatal("rendered manifest secret is empty")
-	}
-
-	updated := &omniv1alpha1.OmniClusterAddon{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-		t.Fatalf("get addon: %v", err)
-	}
-	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
-		t.Fatalf("Ready condition = %#v, want True", got)
-	}
-	if updated.Status.LastRenderTime == nil || !updated.Status.LastRenderTime.Equal(firstStatus.Status.LastRenderTime) {
-		t.Fatalf("LastRenderTime = %v, want cache hit to preserve %v", updated.Status.LastRenderTime, firstStatus.Status.LastRenderTime)
-	}
-}
-
-func TestOmniClusterAddonCachesEmptyRenderedManifest(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	renderer := &fakeAddonRenderer{manifest: []byte{}}
-	item := testAddon()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniClusterAddon{}).
-		WithObjects(testCluster(), item).
-		Build()
-
-	reconciler := &OmniClusterAddonReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-
-	if renderer.calls != 1 {
-		t.Fatalf("renderer calls = %d, want 1", renderer.calls)
-	}
-
-	secret := &corev1.Secret{}
-	secretKey := types.NamespacedName{Namespace: testNamespace, Name: addon.RenderedManifestSecretName(item)}
-	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
-		t.Fatalf("get rendered manifest secret: %v", err)
-	}
-	manifest, ok := secret.Data[addon.RenderedManifestSecretKey]
-	if !ok {
-		t.Fatal("rendered manifest key is missing")
-	}
-	if len(manifest) != 0 {
-		t.Fatalf("rendered manifest length = %d, want 0", len(manifest))
-	}
-	if got, want := secret.Annotations[addon.RenderedManifestHashKey], addon.RenderedManifestHash(nil); got != want {
-		t.Fatalf("rendered manifest hash = %q, want %q", got, want)
-	}
-
-	updated := &omniv1alpha1.OmniClusterAddon{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-		t.Fatalf("get addon: %v", err)
-	}
-	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
-		t.Fatalf("Ready condition = %#v, want True", got)
-	}
-}
-
-func TestOmniClusterAddonRenderFailureMarksReadyFalse(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	renderer := &fakeAddonRenderer{err: fmt.Errorf("chart unavailable")}
-	item := testAddon()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniClusterAddon{}).
-		WithObjects(testCluster(), item).
-		Build()
-
-	reconciler := &OmniClusterAddonReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "chart unavailable") {
-		t.Fatalf("Reconcile() error = %v, want chart unavailable", err)
-	}
-
-	updated := &omniv1alpha1.OmniClusterAddon{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-		t.Fatalf("get addon: %v", err)
-	}
-	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
-		t.Fatalf("Ready condition = %#v, want False", got)
-	}
-}
-
-func TestOmniClusterAddonParseFailureMarksReadyFalse(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	renderer := &fakeAddonRenderer{manifest: []byte("apiVersion: v1\nkind: [")}
-	item := testAddon()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniClusterAddon{}).
-		WithObjects(testCluster(), item).
-		Build()
-
-	reconciler := &OmniClusterAddonReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "rendered manifest is invalid") {
-		t.Fatalf("Reconcile() error = %v, want rendered manifest is invalid", err)
-	}
-
-	updated := &omniv1alpha1.OmniClusterAddon{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-		t.Fatalf("get addon: %v", err)
-	}
-	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
-		t.Fatalf("Ready condition = %#v, want False", got)
-	}
-}
-
-func TestOmniCiliumRenderFailureMarksReadyFalse(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	renderer := &fakeCiliumRenderer{err: fmt.Errorf("chart unavailable")}
-	install := testCilium()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCilium{}).
-		WithObjects(testCluster(), install).
-		Build()
-
-	reconciler := &OmniCiliumReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: install.Name}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "chart unavailable") {
-		t.Fatalf("Reconcile() error = %v, want chart unavailable", err)
-	}
-
-	updated := &omniv1alpha1.OmniCilium{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-		t.Fatalf("get cilium: %v", err)
-	}
-	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
-		t.Fatalf("Ready condition = %#v, want False", got)
-	}
-}
-
-func TestOmniCiliumParseFailureMarksReadyFalse(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	renderer := &fakeCiliumRenderer{manifest: []byte("apiVersion: v1\nkind: [")}
-	install := testCilium()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCilium{}).
-		WithObjects(testCluster(), install).
-		Build()
-
-	reconciler := &OmniCiliumReconciler{Client: k8sClient, Scheme: scheme, Renderer: renderer}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: install.Name}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err == nil || !strings.Contains(err.Error(), "rendered manifest is invalid") {
-		t.Fatalf("Reconcile() error = %v, want rendered manifest is invalid", err)
-	}
-
-	updated := &omniv1alpha1.OmniCilium{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
-		t.Fatalf("get cilium: %v", err)
-	}
-	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse {
-		t.Fatalf("Ready condition = %#v, want False", got)
-	}
-}
-
-func TestOmniClusterWaitsForPendingAddonRender(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	omni := &fakeOmni{}
-	item := testAddon()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniClusterAddon{}).
-		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), item).
-		Build()
-
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-	result, err := reconciler.Reconcile(ctx, request)
-	if err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-	if result.RequeueAfter == 0 {
-		t.Fatal("RequeueAfter is zero, want soft retry while addon render is pending")
-	}
-	if omni.syncCalls != 0 {
-		t.Fatalf("syncCalls = %d, want 0 while addon render is pending", omni.syncCalls)
-	}
-
-	cluster := &omniv1alpha1.OmniCluster{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
-		t.Fatalf("get cluster: %v", err)
-	}
-	if got := meta.FindStatusCondition(cluster.Status.Conditions, omniv1alpha1.ConditionReady); got != nil && got.Reason == omniv1alpha1.ReasonMissingTemplate {
-		t.Fatalf("Ready condition = %#v, want no hard missing-template failure while addon render is pending", got)
-	}
-}
-
-func TestOmniClusterWaitsForPendingCiliumRender(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	omni := &fakeOmni{}
-	install := testCilium()
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}, &omniv1alpha1.OmniControlPlane{}, &omniv1alpha1.OmniWorkers{}, &omniv1alpha1.OmniMachine{}, &omniv1alpha1.OmniCilium{}).
-		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers(), install).
-		Build()
-
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
-	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
-
-	if _, err := reconciler.Reconcile(ctx, request); err != nil {
-		t.Fatalf("first Reconcile() error = %v", err)
-	}
-	result, err := reconciler.Reconcile(ctx, request)
-	if err != nil {
-		t.Fatalf("second Reconcile() error = %v", err)
-	}
-	if result.RequeueAfter == 0 {
-		t.Fatal("RequeueAfter is zero, want soft retry while Cilium render is pending")
-	}
-	if omni.syncCalls != 0 {
-		t.Fatalf("syncCalls = %d, want 0 while Cilium render is pending", omni.syncCalls)
-	}
-
-	cluster := &omniv1alpha1.OmniCluster{}
-	if err := k8sClient.Get(ctx, request.NamespacedName, cluster); err != nil {
-		t.Fatalf("get cluster: %v", err)
-	}
-	if got := meta.FindStatusCondition(cluster.Status.Conditions, omniv1alpha1.ConditionReady); got != nil && got.Reason == omniv1alpha1.ReasonMissingTemplate {
-		t.Fatalf("Ready condition = %#v, want no hard missing-template failure while Cilium render is pending", got)
 	}
 }
 
@@ -2055,8 +1486,6 @@ func TestChildRequestsForCluster(t *testing.T) {
 	otherControlPlane.Name = "other-cp"
 	otherControlPlane.Spec.ClusterRef.Name = testOtherClusterName
 	workers := testWorkers()
-	addonItem := testAddon()
-	install := testCilium()
 	machine := &omniv1alpha1.OmniMachine{
 		ObjectMeta: metav1.ObjectMeta{Name: testMachineName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniMachineSpec{
@@ -2066,7 +1495,7 @@ func TestChildRequestsForCluster(t *testing.T) {
 	cluster := testCluster()
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(testControlPlane(), otherControlPlane, workers, machine, addonItem, install).
+		WithObjects(testControlPlane(), otherControlPlane, workers, machine).
 		Build()
 
 	controlPlaneRequests := controlPlaneRequestsForCluster(ctx, k8sClient, cluster)
@@ -2084,15 +1513,6 @@ func TestChildRequestsForCluster(t *testing.T) {
 		t.Fatalf("machineRequests = %#v, want [node-1]", machineRequests)
 	}
 
-	addonRequests := addonRequestsForCluster(ctx, k8sClient, cluster)
-	if len(addonRequests) != 1 || addonRequests[0].Name != addonItem.Name {
-		t.Fatalf("addonRequests = %#v, want [%s]", addonRequests, addonItem.Name)
-	}
-
-	ciliumRequests := ciliumRequestsForCluster(ctx, k8sClient, cluster)
-	if len(ciliumRequests) != 1 || ciliumRequests[0].Name != install.Name {
-		t.Fatalf("ciliumRequests = %#v, want [%s]", ciliumRequests, install.Name)
-	}
 }
 
 func TestClusterWatchRequestMapping(t *testing.T) {
@@ -2114,7 +1534,7 @@ func TestClusterWatchRequestMapping(t *testing.T) {
 		Build()
 	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme}
 
-	for _, child := range []client.Object{testControlPlane(), testWorkers(), testAddon(), testCilium()} {
+	for _, child := range []client.Object{testControlPlane(), testWorkers(), testMachine()} {
 		requests := requestForChildCluster(ctx, child)
 		if len(requests) != 1 || requests[0].Name != testClusterName {
 			t.Fatalf("requestForChildCluster(%T) = %#v, want cluster %q", child, requests, testClusterName)
@@ -2181,78 +1601,6 @@ func TestKubeconfigExportWatchRequestMapping(t *testing.T) {
 	unannotated.Annotations = nil
 	if requests := kubeconfigExportRequestsForSecret(ctx, unannotated); len(requests) != 0 {
 		t.Fatalf("kubeconfigExportRequestsForSecret(unannotated) = %#v, want none", requests)
-	}
-}
-
-func TestClusterRequestsForAddonSecret(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	item := testAddon()
-	other := testAddon()
-	other.Name = "other-addon"
-	other.Spec.ClusterRef.Name = testOtherClusterName
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      addon.RenderedManifestSecretName(item),
-			Namespace: testNamespace,
-			Labels: map[string]string{
-				addon.RenderedManifestOwnerLabel: item.Name,
-			},
-		},
-	}
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(item, other).
-		Build()
-
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme}
-	requests := reconciler.clustersForAddonSecret(ctx, secret)
-	if len(requests) != 1 || requests[0].Name != testClusterName {
-		t.Fatalf("clustersForAddonSecret() = %#v, want cluster %q", requests, testClusterName)
-	}
-
-	unlabeled := secret.DeepCopy()
-	unlabeled.Labels = nil
-	if requests := reconciler.clustersForAddonSecret(ctx, unlabeled); len(requests) != 0 {
-		t.Fatalf("clustersForAddonSecret(unlabeled) = %#v, want none", requests)
-	}
-}
-
-func TestClusterRequestsForCiliumSecret(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	scheme := testScheme(t)
-	install := testCilium()
-	other := testCilium()
-	other.Name = "other-cilium"
-	other.Spec.ClusterRef.Name = testOtherClusterName
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cilium.RenderedManifestSecretName(install),
-			Namespace: testNamespace,
-			Labels: map[string]string{
-				cilium.RenderedManifestOwnerLabel: install.Name,
-			},
-		},
-	}
-	k8sClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(install, other).
-		Build()
-
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme}
-	requests := reconciler.clustersForCiliumSecret(ctx, secret)
-	if len(requests) != 1 || requests[0].Name != testClusterName {
-		t.Fatalf("clustersForCiliumSecret() = %#v, want cluster %q", requests, testClusterName)
-	}
-
-	unlabeled := secret.DeepCopy()
-	unlabeled.Labels = nil
-	if requests := reconciler.clustersForCiliumSecret(ctx, unlabeled); len(requests) != 0 {
-		t.Fatalf("clustersForCiliumSecret(unlabeled) = %#v, want none", requests)
 	}
 }
 
@@ -2362,24 +1710,6 @@ func testWorkers() *omniv1alpha1.OmniWorkers {
 	}
 }
 
-func testAddon() *omniv1alpha1.OmniClusterAddon {
-	return &omniv1alpha1.OmniClusterAddon{
-		ObjectMeta: metav1.ObjectMeta{Name: "metrics-addon", Namespace: testNamespace},
-		Spec: omniv1alpha1.OmniClusterAddonSpec{
-			ClusterRef:   omniv1alpha1.OmniClusterRef{Name: testClusterName},
-			ManifestName: "metrics",
-			Mode:         "full",
-			Helm: omniv1alpha1.OmniClusterAddonHelmSpec{
-				Repository:  "https://charts.example.test/",
-				Chart:       testHelmReleaseName,
-				Version:     testHelmChartVersion,
-				ReleaseName: testHelmReleaseName,
-				Namespace:   testHelmNamespace,
-			},
-		},
-	}
-}
-
 func testHelmRelease() *omniv1alpha1.OmniHelmRelease {
 	return &omniv1alpha1.OmniHelmRelease{
 		ObjectMeta: metav1.ObjectMeta{Name: "metrics-release", Namespace: testNamespace},
@@ -2400,6 +1730,16 @@ func testHelmRelease() *omniv1alpha1.OmniHelmRelease {
 				Chart:      testHelmReleaseName,
 				Version:    testHelmChartVersion,
 			},
+		},
+	}
+}
+
+func testMachine() *omniv1alpha1.OmniMachine {
+	return &omniv1alpha1.OmniMachine{
+		ObjectMeta: metav1.ObjectMeta{Name: testMachineName, Namespace: testNamespace},
+		Spec: omniv1alpha1.OmniMachineSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
+			MachineID:  "33333333-3333-4333-8333-333333333333",
 		},
 	}
 }
@@ -2475,43 +1815,6 @@ func testHelmReleaseKubeconfigSecret(item *omniv1alpha1.OmniHelmRelease, data []
 		Type:       corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			helmrelease.KubeconfigSecretKey(item): data,
-		},
-	}
-}
-
-func currentAddonSecret(t *testing.T, item *omniv1alpha1.OmniClusterAddon, manifest []byte) *corev1.Secret {
-	t.Helper()
-
-	specHash, err := addon.SpecHash(item)
-	if err != nil {
-		t.Fatalf("SpecHash() error = %v", err)
-	}
-
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      addon.RenderedManifestSecretName(item),
-			Namespace: testNamespace,
-			Labels:    addon.RenderedManifestLabels(item),
-			Annotations: map[string]string{
-				addon.RenderedManifestSpecHashKey: specHash,
-				addon.RenderedManifestHashKey:     addon.RenderedManifestHash(manifest),
-			},
-		},
-		Data: map[string][]byte{
-			addon.RenderedManifestSecretKey: manifest,
-		},
-	}
-}
-
-func testCilium() *omniv1alpha1.OmniCilium {
-	return &omniv1alpha1.OmniCilium{
-		ObjectMeta: metav1.ObjectMeta{Name: "edge-cilium", Namespace: testNamespace},
-		Spec: omniv1alpha1.OmniCiliumSpec{
-			ClusterRef:   omniv1alpha1.OmniClusterRef{Name: testClusterName},
-			ChartVersion: "1.19.3",
-			Values: &apiextensionsv1.JSON{Raw: []byte(`{
-				"kubeProxyReplacement": true
-			}`)},
 		},
 	}
 }

@@ -165,57 +165,6 @@ func TestConnectionWarnings(t *testing.T) {
 	}
 }
 
-func TestOmniClusterAddonValidation(t *testing.T) {
-	t.Parallel()
-
-	validator := &OmniClusterAddonCustomValidator{}
-	item := validAddon()
-
-	_, err := validator.ValidateCreate(context.Background(), item)
-	if err != nil {
-		t.Fatalf("ValidateCreate() error = %v, want nil", err)
-	}
-
-	item.Spec.Helm.Repository = " "
-	_, err = validator.ValidateCreate(context.Background(), item)
-	requireErrorContains(t, err, "helm.repository is required")
-
-	item = validAddon()
-	item.Spec.Helm.Repository = "not a url"
-	_, err = validator.ValidateCreate(context.Background(), item)
-	requireErrorContains(t, err, "helm.repository must be an absolute URL")
-
-	item = validAddon()
-	item.Spec.Helm.Chart = " "
-	_, err = validator.ValidateCreate(context.Background(), item)
-	requireErrorContains(t, err, "helm.chart is required")
-
-	item = validAddon()
-	item.Spec.Helm.Version = " "
-	_, err = validator.ValidateCreate(context.Background(), item)
-	requireErrorContains(t, err, "helm.version is required")
-
-	item = validAddon()
-	item.Spec.Helm.Values = &apiextensionsv1.JSON{Raw: []byte(`[]`)}
-	_, err = validator.ValidateCreate(context.Background(), item)
-	requireErrorContains(t, err, "addon values must be a JSON object")
-
-	item = validAddon()
-	item.Spec.Helm.Values = &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount": 2}`)}
-	_, err = validator.ValidateUpdate(context.Background(), validAddon(), item)
-	if err != nil {
-		t.Fatalf("ValidateUpdate() error = %v, want nil", err)
-	}
-
-	warnings, err := validator.ValidateDelete(context.Background(), item)
-	if err != nil {
-		t.Fatalf("ValidateDelete() error = %v, want nil", err)
-	}
-	if len(warnings) != 0 {
-		t.Fatalf("ValidateDelete() warnings = %#v, want none", warnings)
-	}
-}
-
 func TestOmniKubeconfigExportValidation(t *testing.T) {
 	t.Parallel()
 
@@ -336,47 +285,6 @@ func TestOmniKubeconfigExportValidation(t *testing.T) {
 	requireErrorContains(t, err, "deletionPolicy is required")
 }
 
-func TestOmniCiliumValidation(t *testing.T) {
-	t.Parallel()
-
-	validator := &OmniCiliumCustomValidator{}
-	install := validCilium()
-
-	_, err := validator.ValidateCreate(context.Background(), install)
-	if err != nil {
-		t.Fatalf("ValidateCreate() error = %v, want nil", err)
-	}
-
-	install.Spec.ChartVersion = " "
-	_, err = validator.ValidateCreate(context.Background(), install)
-	requireErrorContains(t, err, "chartVersion is required")
-
-	install = validCilium()
-	install.Spec.ChartRepository = "not a url"
-	_, err = validator.ValidateCreate(context.Background(), install)
-	requireErrorContains(t, err, "chartRepository must be an absolute URL")
-
-	install = validCilium()
-	install.Spec.Values = &apiextensionsv1.JSON{Raw: []byte(`[]`)}
-	_, err = validator.ValidateCreate(context.Background(), install)
-	requireErrorContains(t, err, "cilium values must be a JSON object")
-
-	install = validCilium()
-	install.Spec.Values = &apiextensionsv1.JSON{Raw: []byte(`{"kubeProxyReplacement":"strict"}`)}
-	_, err = validator.ValidateUpdate(context.Background(), validCilium(), install)
-	if err != nil {
-		t.Fatalf("ValidateUpdate() error = %v, want nil", err)
-	}
-
-	warnings, err := validator.ValidateDelete(context.Background(), install)
-	if err != nil {
-		t.Fatalf("ValidateDelete() error = %v, want nil", err)
-	}
-	if len(warnings) != 0 {
-		t.Fatalf("ValidateDelete() warnings = %#v, want none", warnings)
-	}
-}
-
 func validCluster() *omniv1alpha1.OmniCluster {
 	return &omniv1alpha1.OmniCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: validationClusterName},
@@ -398,24 +306,6 @@ func validCluster() *omniv1alpha1.OmniCluster {
 	}
 }
 
-func validAddon() *omniv1alpha1.OmniClusterAddon {
-	return &omniv1alpha1.OmniClusterAddon{
-		ObjectMeta: metav1.ObjectMeta{Name: "metrics"},
-		Spec: omniv1alpha1.OmniClusterAddonSpec{
-			ClusterRef:   omniv1alpha1.OmniClusterRef{Name: validationClusterName},
-			ManifestName: "metrics",
-			Helm: omniv1alpha1.OmniClusterAddonHelmSpec{
-				Repository:  "https://charts.example.test/",
-				Chart:       "metrics-server",
-				Version:     "3.13.0",
-				ReleaseName: "metrics-server",
-				Namespace:   "kube-system",
-				Values:      &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount": 1}`)},
-			},
-		},
-	}
-}
-
 func validKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
 	return &omniv1alpha1.OmniKubeconfigExport{
 		ObjectMeta: metav1.ObjectMeta{Name: "edge-automation-kubeconfig"},
@@ -431,18 +321,6 @@ func validKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
 			TTL:            metav1.Duration{Duration: 24 * time.Hour},
 			RenewBefore:    &metav1.Duration{Duration: 4 * time.Hour},
 			DeletionPolicy: omniv1alpha1.KubeconfigExportDeletionPolicyDelete,
-		},
-	}
-}
-
-func validCilium() *omniv1alpha1.OmniCilium {
-	return &omniv1alpha1.OmniCilium{
-		ObjectMeta: metav1.ObjectMeta{Name: "edge-cilium"},
-		Spec: omniv1alpha1.OmniCiliumSpec{
-			ClusterRef:      omniv1alpha1.OmniClusterRef{Name: validationClusterName},
-			ChartVersion:    "1.18.3",
-			ChartRepository: "https://helm.cilium.io/",
-			Values:          &apiextensionsv1.JSON{Raw: []byte(`{"kubeProxyReplacement": true}`)},
 		},
 	}
 }

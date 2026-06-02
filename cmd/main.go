@@ -234,13 +234,6 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnimachine")
 		os.Exit(1)
 	}
-	if err := (&controller.OmniClusterAddonReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "omniclusteraddon")
-		os.Exit(1)
-	}
 	if err := (&controller.OmniKubeconfigExportReconciler{
 		Client:       mgr.GetClient(),
 		Scheme:       mgr.GetScheme(),
@@ -257,20 +250,11 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnihelmrelease")
 		os.Exit(1)
 	}
-	if err := (&controller.OmniCiliumReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "omnicilium")
-		os.Exit(1)
-	}
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		webhooks := []struct {
 			name  string
 			setup func(ctrl.Manager) error
 		}{
-			{name: "OmniClusterAddon", setup: webhookv1alpha1.SetupOmniClusterAddonWebhookWithManager},
-			{name: "OmniCilium", setup: webhookv1alpha1.SetupOmniCiliumWebhookWithManager},
 			{name: "OmniCluster", setup: webhookv1alpha1.SetupOmniClusterWebhookWithManager},
 			{name: "OmniConnection", setup: webhookv1alpha1.SetupOmniConnectionWebhookWithManager},
 			{name: "OmniControlPlane", setup: webhookv1alpha1.SetupOmniControlPlaneWebhookWithManager},

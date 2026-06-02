@@ -19,8 +19,6 @@ rules:
 - apiGroups:
   - omni.texashpc.com
   resources:
-  - omniciliums
-  - omniclusteraddons
   - omniclusters
   - omniconnections
   - omnicontrolplanes
@@ -39,8 +37,6 @@ rules:
 - apiGroups:
   - omni.texashpc.com
   resources:
-  - omniciliums/finalizers
-  - omniclusteraddons/finalizers
   - omniclusters/finalizers
   - omniconnections/finalizers
   - omnicontrolplanes/finalizers
@@ -53,8 +49,6 @@ rules:
 - apiGroups:
   - omni.texashpc.com
   resources:
-  - omniciliums/status
-  - omniclusteraddons/status
   - omniclusters/status
   - omniconnections/status
   - omnicontrolplanes/status

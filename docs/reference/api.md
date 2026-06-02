@@ -85,24 +85,6 @@ Defines optional per-machine settings for a static machine.
 | `spec.systemExtensions` | No | Machine-specific system extensions. |
 | `spec.kernelArgs` | No | Machine-specific kernel args. |
 
-## OmniClusterAddon
-
-Defines a generic Helm-rendered manifest for one `OmniCluster`.
-
-| Field | Required | Notes |
-| --- | --- | --- |
-| `spec.clusterRef.name` | Yes | `OmniCluster` in the same namespace. |
-| `spec.manifestName` | No | Omni manifest sync entry name. Defaults to `metadata.name`. |
-| `spec.mode` | No | Omni manifest apply mode, `full` or `one-time`. Defaults to `full`. |
-| `spec.helm.repository` | Yes | Helm repository URL. |
-| `spec.helm.chart` | Yes | Helm chart name to render. |
-| `spec.helm.version` | Yes | Helm chart version to render. |
-| `spec.helm.releaseName` | No | Helm release name used while rendering. Defaults to `metadata.name`. |
-| `spec.helm.namespace` | No | Namespace for rendered objects. Defaults to `default`. |
-| `spec.helm.values` | No | Helm values object passed to the renderer. |
-
-Status includes rendered manifest Secret name, rendered manifest hash, manifest name, chart, chart version, and last render time.
-
 ## OmniHelmRelease
 
 Reconciles a Helm release directly in an Omni-created workload cluster using an explicit kubeconfig Secret.
@@ -151,23 +133,6 @@ Status includes `Ready`, `Accepted`, `Exported`, target Secret name/key, kubecon
 The target Secret is created in the same namespace as the export. The default data key is `kubeconfig`. Secret labels and annotations include the owning export UID/name, remote cluster name, generated kubeconfig hash, export spec hash, expiration time, and last rotation time.
 
 Changing the service-account user, groups, TTL, target key, or remote cluster name changes the export spec hash and causes a new kubeconfig request. `renewBefore`, target Secret name, and deletion policy affect rotation or cleanup behavior but do not change the generated kubeconfig identity.
-
-## OmniCilium
-
-Deprecated. Defines a legacy Cilium install for one `OmniCluster`. New Cilium manifests should prefer `OmniClusterAddon` plus explicit Talos patches on `OmniCluster`.
-
-| Field | Required | Notes |
-| --- | --- | --- |
-| `spec.clusterRef.name` | Yes | `OmniCluster` in the same namespace. |
-| `spec.chartVersion` | Yes | Cilium Helm chart version to render, such as `1.19.3`. |
-| `spec.chartRepository` | No | Helm repository URL. Defaults to `https://helm.cilium.io/`. |
-| `spec.releaseName` | No | Helm release name used while rendering. Defaults to `cilium`. |
-| `spec.namespace` | No | Namespace for rendered Cilium objects. Defaults to `kube-system`. |
-| `spec.manifestName` | No | Omni manifest sync entry name. Defaults to `cilium`. |
-| `spec.mode` | No | Omni manifest apply mode, `full` or `one-time`. Defaults to `full`. |
-| `spec.values` | No | Cilium Helm values merged over the operator's Talos-compatible defaults. |
-
-Status includes rendered manifest Secret name, rendered manifest hash, manifest name, chart version, kube-proxy replacement state, and last render time.
 
 ## Common nested fields
 

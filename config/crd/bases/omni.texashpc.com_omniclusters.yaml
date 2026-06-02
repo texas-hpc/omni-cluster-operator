@@ -228,16 +228,6 @@ spec:
           status:
             description: status defines the observed state of OmniCluster
             properties:
-              addonRefs:
-                description: addonRefs are the generic addon resources selected for
-                  the last rendered template.
-                items:
-                  type: string
-                type: array
-              ciliumRef:
-                description: ciliumRef is the Cilium installation selected for the
-                  last rendered template.
-                type: string
               clusterName:
                 description: clusterName is the Omni cluster name.
                 type: string

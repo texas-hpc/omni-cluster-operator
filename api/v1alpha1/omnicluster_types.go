@@ -94,14 +94,6 @@ type OmniClusterStatus struct {
 	// machineRefs are the machine documents selected for the last rendered template.
 	// +optional
 	MachineRefs []string `json:"machineRefs,omitempty"`
-
-	// addonRefs are the generic addon resources selected for the last rendered template.
-	// +optional
-	AddonRefs []string `json:"addonRefs,omitempty"`
-
-	// ciliumRef is the Cilium installation selected for the last rendered template.
-	// +optional
-	CiliumRef string `json:"ciliumRef,omitempty"`
 }
 
 // +kubebuilder:object:root=true
