@@ -174,16 +174,80 @@ commits, but it cannot know whether an API change is breaking, whether a chart
 behavior change deserves a minor release, or whether stored Kubernetes resources
 need a major-version warning. That judgment belongs in the pull request.
 
-Bump the base `version` in `version.json` when the current release line is no
-longer appropriate:
+This project follows [Semantic Versioning](https://semver.org/), the Kubernetes
+[API versioning](https://kubernetes.io/docs/reference/using-api/) and
+[deprecation](https://kubernetes.io/docs/reference/using-api/deprecation-policy/)
+model, and Kubernetes
+[CRD versioning](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/)
+rules. In practical operator terms: CRDs are user-facing APIs, deprecations are
+release-line changes, and stored custom resources need explicit migration
+planning.
 
-- Use a minor bump for new CRDs, new fields, new chart capabilities, meaningful
-  behavior changes, or non-breaking operator features users should notice.
-- Use a major bump for breaking API changes, incompatible CRD/schema changes,
-  disruptive chart/RBAC changes, migration requirements, or behavior changes
-  that can surprise existing installations.
-- Keep patch-level artifact versions on the current line for small compatible
-  fixes. NBGV will produce patch movement from filtered artifact commits.
+This matches established operator guidance:
+[Operator SDK](https://sdk.operatorframework.io/docs/best-practices/best-practices/)
+recommends SemVer for operators and Kubernetes API versioning for CRDs,
+[cert-manager](https://cert-manager.io/docs/contributing/api-compatibility/)
+follows upstream Kubernetes API compatibility,
+[Argo CD](https://argo-cd.readthedocs.io/en/stable/operator-manual/upgrading/overview/)
+keeps patch releases non-breaking, and
+[ECK](https://www.elastic.co/docs/deploy-manage/upgrade/orchestrator/upgrade-cloud-on-k8s)
+documents CRD/operator upgrade ordering explicitly.
+
+#### Public release surface
+
+For versioning decisions, treat all of the following as public release surface:
+
+- CRD group, version, kind, plural, scope, categories, short names, subresources,
+  schemas, defaults, validation, enum values, `spec`, `status`, status
+  conditions, and additional printer columns.
+- Go API types under `api/`, because they generate the CRDs and may be imported
+  by downstream tooling.
+- Validating/defaulting webhook behavior and any compatibility assumptions it
+  creates for existing custom resources.
+- Helm chart values, rendered install resources, RBAC, webhook configuration,
+  cert-manager resources, container args, and environment variables.
+- Documented examples, sample manifests, upgrade instructions, and user-facing
+  CLI/task workflows.
+
+Internal controller implementation, tests, generated output, and build plumbing
+are not public API by themselves, but changes to them still require a version
+bump when they alter the public release surface above.
+
+#### Patch, minor, and major lines
+
+Keep patch-level artifact versions on the current line for compatible fixes
+only. Examples include reconcile bug fixes that preserve the API contract,
+security fixes, dependency updates that do not change supported behavior,
+compatible documentation fixes, and build/test maintenance. NBGV will produce
+patch movement from filtered artifact commits.
+
+Use a minor bump for additive or notice-giving changes:
+
+- New CRDs or controllers.
+- New optional `spec` fields with defaults that preserve old behavior.
+- New status fields, status conditions, printer columns, or events.
+- New chart values or install options that default to current behavior.
+- New controller behavior users can opt into without migrating existing objects.
+- Deprecating a CRD, API version, field, enum value, chart value, or documented
+  workflow while keeping it functional.
+
+Use a major bump for incompatible public-surface changes after `1.0.0`:
+
+- Deleting or renaming a CRD.
+- Changing CRD group, kind, plural, scope, or served API versions.
+- Removing, renaming, retyping, or repurposing fields.
+- Adding required fields without safe defaults or conversion.
+- Narrowing schemas, enum values, validation, or admission behavior in a way
+  that can reject existing objects or manifests.
+- Changing defaults or reconciliation semantics in a way existing installations
+  must migrate around.
+- Removing chart values, changing install scope, or changing RBAC/webhook
+  behavior in a disruptive way.
+
+While the project is still on `0.y.z`, do not use patch releases for breaking
+changes. Use a new minor line for changes that would be major after `1.0.0`,
+mark the release notes clearly as breaking, and include migration guidance. Only
+move to `1.0.0` when maintainers intentionally declare the public API stable.
 
 When changing the base version, keep `versionHeightOffsetAppliesTo` aligned with
 the new base version so the first clean `master` release on that line starts at
@@ -192,3 +256,49 @@ the new base version so the first clean `master` release on that line starts at
 Update [`CHANGELOG.md`](CHANGELOG.md) only when the pull request bumps the base
 minor or major version. Patch-level fixes do not need manual changelog entries;
 the GitHub Release can use generated commit notes for those.
+
+#### CRD change decisions
+
+Use this table when a pull request touches `api/`, Kubebuilder markers,
+generated CRDs, chart CRD packaging, admission behavior, or documented custom
+resources.
+
+| Change | Version action | Required work |
+| --- | --- | --- |
+| Add a new CRD/GVK | Minor | Add controller/RBAC/chart CRD/docs/tests, sync chart CRDs, update `CHANGELOG.md`. |
+| Add an optional `spec` field | Minor | Preserve old behavior by default; document the field and add validation/tests. |
+| Add a required `spec` field | Major after `1.0.0`; breaking minor on `0.y.z` | Prefer a new API version with conversion/defaulting; include migration notes. |
+| Add status fields, status conditions, or printer columns | Minor | Keep existing status fields and condition semantics intact. |
+| Fix controller behavior without changing schema or user-visible semantics | Patch | Add or update focused tests. |
+| Loosen validation or accept a new enum value | Minor | Confirm existing objects remain valid. |
+| Tighten validation, remove enum values, or reject objects that used to pass | Major after `1.0.0`; breaking minor on `0.y.z` | Add migration guidance and compatibility tests. |
+| Rename, remove, retype, or repurpose a field | Major after `1.0.0`; breaking minor on `0.y.z` | Prefer a new API version and conversion path; never silently reuse old meaning. |
+| Change defaults or reconciliation semantics for existing objects | Major after `1.0.0`; breaking minor on `0.y.z` | Document impact, migration, and rollback behavior. |
+| Mark a CRD, API version, field, enum value, or chart value deprecated | Minor | Keep it working; add replacement guidance, warnings where Kubernetes supports them, and `CHANGELOG.md` notes. |
+| Stop serving or remove an API version | Major after `1.0.0`; breaking minor on `0.y.z` | Require prior deprecation except for emergency fixes; verify stored-version migration before removal. |
+| Delete a CRD/GVK | Major after `1.0.0`; breaking minor on `0.y.z` | Require prior deprecation except for emergency fixes; include cleanup, finalizer, and migration guidance. |
+| Change CRD group, kind, plural, or scope | Treat as delete plus new CRD | Include migration tooling or explicit re-apply/delete guidance. |
+
+#### Deprecation and removal process
+
+Deprecation is a promise to keep the old surface working for the deprecation
+release. Do not deprecate and remove the same public API in one compatible
+release.
+
+For CRD API versions, prefer the Kubernetes multi-version flow:
+
+1. Add the replacement version with `served: true`.
+2. Use `strategy: None` only when schemas are equivalent; otherwise add a
+   conversion webhook before data can move safely between versions.
+3. Mark the old version deprecated and provide a warning message where
+   Kubernetes supports it.
+4. Give users migration instructions and keep both versions served for the
+   deprecation release.
+5. Before removal, ensure stored objects have migrated off the old storage
+   version and the old version is gone from CRD `status.storedVersions`.
+6. Only then set `served: false`, remove the version from the CRD, and drop
+   conversion support in the same breaking release.
+
+For whole-CRD deletion, remember that Helm does not upgrade or delete CRDs as
+ordinary release resources. The release notes must explain the manual cleanup or
+migration path, including finalizers and existing custom resources.
