@@ -60,10 +60,10 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 	})
 
 	AfterAll(func() {
-			By("deleting Omni test resources")
-			_, _ = utils.Run(exec.Command("kubectl", "delete",
-				"omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniconnections",
-				"--all", "-n", namespace, "--ignore-not-found", "--timeout=60s"))
+		By("deleting Omni test resources")
+		_, _ = utils.Run(exec.Command("kubectl", "delete",
+			"omniclusters,omnicontrolplanes,omniworkers,omnimachines,omnihelmreleases,omnikubeconfigexports,omniconnections",
+			"--all", "-n", namespace, "--ignore-not-found", "--timeout=60s"))
 
 		By("undeploying the controller-manager")
 		cmd := exec.Command("mise", "run", "undeploy")
@@ -274,10 +274,10 @@ spec:
 
 		It("marks child template documents that reference a missing cluster", func() {
 			_, err := kubectlApply(`
-	apiVersion: omni.texashpc.com/v1alpha1
-	kind: OmniMachine
-	metadata:
-	  name: e2e-missing-cluster-machine
+apiVersion: omni.texashpc.com/v1alpha1
+kind: OmniMachine
+metadata:
+  name: e2e-missing-cluster-machine
   namespace: omni-cluster-operator-system
 spec:
   clusterRef:
