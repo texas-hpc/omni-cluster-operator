@@ -25,16 +25,41 @@ templates.
 - NBGV `pathFilters` intentionally keep docs-only changes from advancing
   artifact versions. Keep publish workflow path filters aligned with
   `version.json` path filters when changing release inputs.
-- For breaking changes, incompatible API/schema changes, new CRDs, meaningful
-  chart behavior changes, or other minor/major release-line changes, bump the
-  base `version` in `version.json` and keep `versionHeightOffsetAppliesTo`
-  aligned with the new base version.
 - `CHANGELOG.md` is for minor and major release notes only. When an agent makes
   or reviews a change that bumps the base minor/major version, update
   `CHANGELOG.md` under `Unreleased` in the same change. Do not require changelog
   entries for ordinary patch fixes; GitHub Releases can use generated notes for
   those.
 - Keep secrets out of samples except obvious placeholders.
+
+## Release Versioning Policy
+
+- Treat CRDs, Go API types under `api/`, admission/defaulting behavior, status
+  conditions, chart values, installed RBAC/webhook resources, and documented
+  samples as public release surface.
+- Patch lines are only for backward-compatible fixes. Do not ship new CRDs, CRD
+  schema/API changes, deprecations, migration requirements, new chart
+  capabilities, or breaking behavior changes as patch-only changes.
+- Minor lines are for additive or notice-giving changes: new CRDs, new optional
+  fields with old-behavior defaults, new status fields or conditions, new chart
+  values defaulted to existing behavior, new controller capabilities, or marking
+  CRDs/fields/API versions as deprecated.
+- Major lines are for incompatible public-surface changes after `1.0.0`:
+  deleting or renaming CRDs, ceasing to serve API versions, changing CRD group,
+  kind, plural, or scope, removing or retyping fields, adding required fields
+  without defaults, narrowing enum/validation rules that can reject existing
+  objects, or changing reconciliation/chart behavior in a way existing
+  installations must migrate around.
+- While the project is on `0.y.z`, use a new minor line for changes that would
+  be major after `1.0.0`, mark them clearly as breaking in `CHANGELOG.md`, and
+  never hide them in a patch release.
+- When bumping the base `version`, keep `versionHeightOffsetAppliesTo` aligned
+  with the new base version so the first clean `master` release on that line
+  starts at `.0`.
+- Deprecated CRDs, fields, and API versions must keep working in the release
+  that marks them deprecated. Removing them requires a later breaking release,
+  migration notes, and a stored-version/finalizer cleanup plan when Kubernetes
+  may already have persisted custom resources.
 
 ## Generated Files
 
