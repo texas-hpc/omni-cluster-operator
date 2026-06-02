@@ -14,10 +14,16 @@ spec:
     singular: omnicilium
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - deprecated: true
+    deprecationWarning: OmniCilium is deprecated; use OmniClusterAddon plus OmniCluster.spec.patches
+      for Cilium installs.
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OmniCilium is the Schema for the omniciliums API
+        description: |-
+          OmniCilium is the Schema for the omniciliums API
+
+          Deprecated: use OmniClusterAddon plus explicit OmniCluster.spec.patches for Cilium installs.
         properties:
           apiVersion:
             description: |-
