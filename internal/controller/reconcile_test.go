@@ -50,6 +50,8 @@ const (
 	testWorkersName      = "workers"
 	testControlPlaneName = "edge-cp"
 	testOtherClusterName = "other"
+	testConnectionName   = "omni"
+	testOtherConnection  = "other-omni"
 	testOldKubeconfigKey = "old-kubeconfig"
 	testHelmReleaseName  = "metrics-server"
 	testHelmNamespace    = "kube-system"
@@ -58,6 +60,7 @@ const (
 
 type fakeOmni struct {
 	pingErr           error
+	pingCalls         int
 	syncErr           error
 	statusErr         error
 	syncedTemplate    []byte
@@ -121,6 +124,7 @@ func (f *fakeHelmReleaseClient) Uninstall(_ context.Context, _ *omniv1alpha1.Omn
 }
 
 func (f *fakeOmni) Ping(_ context.Context, connection *omniv1alpha1.OmniConnection) (string, error) {
+	f.pingCalls++
 	return fmt.Sprintf("connected to %s", connection.Spec.Endpoint), f.pingErr
 }
 
@@ -656,13 +660,15 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 			ctx := context.Background()
 			scheme := testScheme(t)
 			connection := testConnection()
+			connection.Finalizers = []string{omniv1alpha1.Finalizer}
 			k8sClient := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
 				WithObjects(connection).
 				Build()
 
-			reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: &fakeOmni{pingErr: tt.pingErr}}
+			omni := &fakeOmni{pingErr: tt.pingErr}
+			reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}})
 			if tt.wantError && err == nil {
 				t.Fatal("Reconcile() error = nil, want error")
@@ -672,6 +678,9 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 			}
 			if tt.wantRequeue && result.RequeueAfter == 0 {
 				t.Fatal("RequeueAfter = 0, want periodic connection check")
+			}
+			if omni.pingCalls != 1 {
+				t.Fatalf("pingCalls = %d, want 1", omni.pingCalls)
 			}
 
 			updated := &omniv1alpha1.OmniConnection{}
@@ -697,6 +706,126 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 				t.Fatalf("Stalled condition = %#v, want status %s reason %s", stalled, tt.wantStalled, tt.wantReason)
 			}
 		})
+	}
+}
+
+func TestOmniConnectionAddsFinalizer(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	connection := testConnection()
+	omni := &fakeOmni{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
+		WithObjects(connection).
+		Build()
+	reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result == (ctrl.Result{}) {
+		t.Fatal("Result is empty, want requeue after adding finalizer")
+	}
+	if omni.pingCalls != 0 {
+		t.Fatalf("pingCalls = %d, want 0 before finalizer is persisted", omni.pingCalls)
+	}
+
+	updated := &omniv1alpha1.OmniConnection{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: connection.Name}, updated); err != nil {
+		t.Fatalf("get connection: %v", err)
+	}
+	if len(updated.Finalizers) != 1 || updated.Finalizers[0] != omniv1alpha1.Finalizer {
+		t.Fatalf("finalizers = %#v, want new finalizer", updated.Finalizers)
+	}
+}
+
+func TestOmniConnectionDeleteWaitsForReferencingClusters(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	deletionTime := metav1.Now()
+	connection := testConnection()
+	connection.Finalizers = []string{omniv1alpha1.Finalizer}
+	connection.DeletionTimestamp = &deletionTime
+	cluster := testCluster()
+	otherCluster := testCluster()
+	otherCluster.Name = testOtherClusterName
+	otherCluster.Spec.ConnectionRef.Name = testOtherConnection
+	omni := &fakeOmni{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
+		WithObjects(connection, cluster, otherCluster).
+		Build()
+	reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result.RequeueAfter != time.Minute {
+		t.Fatalf("RequeueAfter = %s, want 1m", result.RequeueAfter)
+	}
+	if omni.pingCalls != 0 {
+		t.Fatalf("pingCalls = %d, want 0 during deletion", omni.pingCalls)
+	}
+
+	updated := &omniv1alpha1.OmniConnection{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: connection.Name}, updated); err != nil {
+		t.Fatalf("get connection: %v", err)
+	}
+	if len(updated.Finalizers) != 1 || updated.Finalizers[0] != omniv1alpha1.Finalizer {
+		t.Fatalf("finalizers = %#v, want finalizer retained", updated.Finalizers)
+	}
+	ready := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady)
+	if ready == nil || ready.Status != metav1.ConditionFalse || ready.Reason != omniv1alpha1.ReasonDeleting || !strings.Contains(ready.Message, testClusterName) || strings.Contains(ready.Message, testOtherClusterName) {
+		t.Fatalf("Ready condition = %#v, want blocked by %q only", ready, testClusterName)
+	}
+	stalled := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionStalled)
+	if stalled == nil || stalled.Status != metav1.ConditionTrue || stalled.Reason != omniv1alpha1.ReasonDeleting {
+		t.Fatalf("Stalled condition = %#v, want True/%s", stalled, omniv1alpha1.ReasonDeleting)
+	}
+}
+
+func TestOmniConnectionDeleteRemovesFinalizersWhenUnreferenced(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	deletionTime := metav1.Now()
+	connection := testConnection()
+	connection.Finalizers = []string{omniv1alpha1.Finalizer, omniv1alpha1.LegacyFinalizer}
+	connection.DeletionTimestamp = &deletionTime
+	omni := &fakeOmni{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
+		WithObjects(connection).
+		Build()
+	reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if omni.pingCalls != 0 {
+		t.Fatalf("pingCalls = %d, want 0 during deletion", omni.pingCalls)
+	}
+
+	updated := &omniv1alpha1.OmniConnection{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: connection.Name}, updated)
+	if apierrors.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("get connection: %v", err)
+	}
+	if len(updated.Finalizers) != 0 {
+		t.Fatalf("finalizers = %#v, want empty", updated.Finalizers)
 	}
 }
 
@@ -1534,7 +1663,7 @@ func TestClusterWatchRequestMapping(t *testing.T) {
 			&omniv1alpha1.OmniCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: testOtherClusterName, Namespace: testNamespace},
 				Spec: omniv1alpha1.OmniClusterSpec{
-					ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "other-omni"},
+					ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: testOtherConnection},
 				},
 			},
 		).
@@ -1549,6 +1678,18 @@ func TestClusterWatchRequestMapping(t *testing.T) {
 	}
 	if requests := requestForChildCluster(ctx, testConnection()); len(requests) != 0 {
 		t.Fatalf("requestForChildCluster(connection) = %#v, want none", requests)
+	}
+	connectionRequests := requestForClusterConnection(ctx, testCluster())
+	if len(connectionRequests) != 1 || connectionRequests[0].Name != testConnectionName {
+		t.Fatalf("requestForClusterConnection() = %#v, want connection %q", connectionRequests, testConnectionName)
+	}
+	if requests := requestForClusterConnection(ctx, testConnection()); len(requests) != 0 {
+		t.Fatalf("requestForClusterConnection(connection) = %#v, want none", requests)
+	}
+	emptyConnectionRef := testCluster()
+	emptyConnectionRef.Spec.ConnectionRef.Name = ""
+	if requests := requestForClusterConnection(ctx, emptyConnectionRef); len(requests) != 0 {
+		t.Fatalf("requestForClusterConnection(empty) = %#v, want none", requests)
 	}
 	if requests := requestForClusterRef(testNamespace, ""); len(requests) != 0 {
 		t.Fatalf("requestForClusterRef(empty) = %#v, want none", requests)
@@ -1572,7 +1713,7 @@ func TestKubeconfigExportWatchRequestMapping(t *testing.T) {
 	otherCluster := &omniv1alpha1.OmniCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: testOtherClusterName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniClusterSpec{
-			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "other-omni"},
+			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: testOtherConnection},
 		},
 	}
 	k8sClient := fake.NewClientBuilder().
@@ -1663,7 +1804,7 @@ func testScheme(t *testing.T) *runtime.Scheme {
 
 func testConnection() *omniv1alpha1.OmniConnection {
 	return &omniv1alpha1.OmniConnection{
-		ObjectMeta: metav1.ObjectMeta{Name: "omni", Namespace: testNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: testConnectionName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniConnectionSpec{
 			Endpoint: "https://omni.example.test",
 			Auth: omniv1alpha1.OmniAuthSpec{
@@ -1680,7 +1821,7 @@ func testCluster() *omniv1alpha1.OmniCluster {
 	return &omniv1alpha1.OmniCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: testClusterName, Namespace: testNamespace},
 		Spec: omniv1alpha1.OmniClusterSpec{
-			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: "omni"},
+			ConnectionRef: omniv1alpha1.OmniConnectionRef{Name: testConnectionName},
 			Kubernetes:    omniv1alpha1.KubernetesSpec{Version: "v1.35.0"},
 			Talos:         omniv1alpha1.TalosSpec{Version: "v1.13.2"},
 		},

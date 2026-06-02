@@ -43,4 +43,6 @@ Child resources do not select an `OmniConnection` directly. This keeps all templ
 
 `OmniCluster` is the resource with remote side effects. It adds the Omni finalizer, syncs the rendered template to Omni, reads remote status, and deletes the remote Omni cluster on Kubernetes deletion unless orphan mode is enabled.
 
+`OmniConnection` also has a finalizer. Deleting a connection waits until all `OmniCluster` resources in the same namespace that reference it are deleted, which keeps cluster finalizers able to read the connection while they clean up remote Omni state.
+
 Set `spec.deletePolicy.orphan: true` when deleting the Kubernetes resources should leave the remote Omni cluster intact.
