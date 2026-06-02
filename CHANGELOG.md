@@ -18,6 +18,8 @@ entries under the released version heading.
   service-account kubeconfig Secret exports.
 - Added `OmniHelmRelease` for opt-in direct Helm release reconciliation against
   workload clusters using explicit kubeconfig Secrets.
+- Added a `Stalled` condition on `OmniConnection` connection failures so GitOps
+  health checks can fail fast instead of timing out while `Ready=False`.
 
 ### Changed
 

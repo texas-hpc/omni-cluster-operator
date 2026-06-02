@@ -19,6 +19,8 @@ The default operator watches only its release namespace. Put the `OmniConnection
 
 Do not commit real Omni service account keys. Use your normal secret workflow, such as SOPS, External Secrets Operator, Sealed Secrets, or a manually created Secret.
 
+The referenced Secret key must contain only the base64 Omni service account key value, such as the value of `OMNI_SERVICE_ACCOUNT_KEY`. Do not store the whole copied `OMNI_ENDPOINT=...` / `OMNI_SERVICE_ACCOUNT_KEY=...` environment block in `serviceAccountKey`.
+
 The Secret must exist before the `OmniConnection` can become ready:
 
 ```yaml

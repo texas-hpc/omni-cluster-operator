@@ -624,6 +624,7 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 		pingErr      error
 		wantStatus   metav1.ConditionStatus
 		wantReason   string
+		wantStalled  metav1.ConditionStatus
 		wantRequeue  bool
 		wantError    bool
 		wantContains string
@@ -632,6 +633,7 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 			name:         "success",
 			wantStatus:   metav1.ConditionTrue,
 			wantReason:   omniv1alpha1.ReasonConnectionReady,
+			wantStalled:  metav1.ConditionFalse,
 			wantRequeue:  true,
 			wantContains: "connected to https://omni.example.test",
 		},
@@ -640,6 +642,7 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 			pingErr:      fmt.Errorf("unauthorized"),
 			wantStatus:   metav1.ConditionFalse,
 			wantReason:   omniv1alpha1.ReasonConnectionFailed,
+			wantStalled:  metav1.ConditionTrue,
 			wantRequeue:  true,
 			wantError:    true,
 			wantContains: "failed to connect to Omni: unauthorized",
@@ -688,6 +691,10 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 			reachable := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReachable)
 			if reachable == nil || reachable.Status != tt.wantStatus || reachable.Reason != tt.wantReason {
 				t.Fatalf("Reachable condition = %#v, want status %s reason %s", reachable, tt.wantStatus, tt.wantReason)
+			}
+			stalled := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionStalled)
+			if stalled == nil || stalled.Status != tt.wantStalled || stalled.Reason != tt.wantReason {
+				t.Fatalf("Stalled condition = %#v, want status %s reason %s", stalled, tt.wantStalled, tt.wantReason)
 			}
 		})
 	}

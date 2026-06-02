@@ -38,6 +38,7 @@ kubectl logs deployment/omni-cluster-operator-controller-manager \
 | Condition | What it means |
 | --- | --- |
 | `Reachable` | The operator can reach the configured Omni endpoint with the service account key. |
+| `Stalled` | Reconciliation has hit an error that GitOps health checks should treat as failed rather than still progressing. |
 | `Accepted` | A child document references an existing `OmniCluster`. |
 | `Validated` | The assembled Omni template passed upstream Omni validation. |
 | `Synced` | The desired template was synced to Omni. |
@@ -47,7 +48,7 @@ kubectl logs deployment/omni-cluster-operator-controller-manager \
 | Reason | Likely cause |
 | --- | --- |
 | `MissingSecret` | The referenced Secret or key does not exist in the operator namespace. |
-| `ConnectionFailed` | Omni endpoint, TLS, network, or credential failure. |
+| `ConnectionFailed` | Omni endpoint, TLS, network, or credential failure. If the message mentions Omni environment assignments, store only the `OMNI_SERVICE_ACCOUNT_KEY` value in the referenced Secret key, not the whole copied env block. |
 | `MissingConnection` | `OmniCluster.spec.connectionRef.name` points at a missing `OmniConnection`. |
 | `MissingCluster` | A child resource points at a missing `OmniCluster`. |
 | `ValidationFailed` | The rendered Omni cluster template is not accepted by Omni validation. |
