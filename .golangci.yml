@@ -45,6 +45,12 @@ linters:
           - dupl
           - lll
         path: internal/*
+      # OmniCilium is deprecated for consumers, but the operator still keeps
+      # compatibility controllers, renderers, webhooks, and tests for it.
+      - linters:
+          - staticcheck
+        path: internal/(cilium|controller|webhook)/.*
+        text: "SA1019: .*OmniCilium is deprecated"
     paths:
       - third_party$
       - builtin$

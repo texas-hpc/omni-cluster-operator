@@ -103,9 +103,12 @@ type OmniCiliumStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:deprecatedversion:warning="OmniCilium is deprecated; use OmniClusterAddon plus OmniCluster.spec.patches for Cilium installs."
 // +kubebuilder:resource:path=omniciliums,singular=omnicilium
 
 // OmniCilium is the Schema for the omniciliums API
+//
+// Deprecated: use OmniClusterAddon plus explicit OmniCluster.spec.patches for Cilium installs.
 type OmniCilium struct {
 	metav1.TypeMeta `json:",inline"`
 
