@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	// Finalizer is attached to resources that own remote Omni lifecycle or generated artifacts.
+	// Finalizer is attached to resources that own remote Omni lifecycle, generated artifacts, or dependent references.
 	Finalizer = "omni.texashpc.com/finalizer"
 	// LegacyFinalizer is the old finalizer value from before the API group rename.
 	LegacyFinalizer = "omni.texas-hpc.org/finalizer"
