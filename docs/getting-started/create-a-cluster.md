@@ -48,8 +48,8 @@ flowchart LR
   Workers["OmniWorkers"] --> Cluster
   Machine["OmniMachine"] --> Cluster
   Addon["OmniClusterAddon"] --> Cluster
-  Export["OmniKubeconfigExport"] --> Cluster
-  HelmRelease["OmniHelmRelease"] --> Export
+  Export["OmniKubeconfigExport"] --> HelmRelease["OmniHelmRelease"]
+  Export --> Cluster
   HelmRelease --> Cluster
   Cluster --> Omni["Omni template sync"]
 ```

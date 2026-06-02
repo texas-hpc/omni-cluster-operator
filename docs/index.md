@@ -49,9 +49,9 @@ flowchart LR
   Workers["OmniWorkers"] --> Cluster
   Machine["OmniMachine"] --> Cluster
   Addon["OmniClusterAddon"] --> Cluster
-  HelmRelease["OmniHelmRelease"] --> Export
+  Export["OmniKubeconfigExport"] --> HelmRelease["OmniHelmRelease"]
   HelmRelease --> Cluster
-  Export["OmniKubeconfigExport"] --> Cluster
+  Export --> Cluster
   Cluster --> Omni["Sidero Omni"]
 ```
 
