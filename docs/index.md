@@ -14,6 +14,7 @@ Use it when you want:
 - Separate Kubernetes resources for cluster settings, control plane, workers, and static machines.
 - Optional Helm-rendered addons, including Cilium, while Omni applies raw manifests.
 - Opt-in workload-cluster kubeconfig Secret exports for scoped automation.
+- Opt-in direct Helm releases for add-ons that need Helm release state in the workload cluster.
 - Finalizer-based remote cleanup, with an orphan mode when you want to keep the Omni cluster after deleting Kubernetes resources.
 
 ## Which operator should I use?
@@ -29,11 +30,12 @@ If you want to manage Talos Linux clusters directly without Omni, consider [`tal
 3. [Manage a cluster lifecycle](getting-started/create-a-cluster.md).
 4. [Configure workload-cluster access](getting-started/workload-access.md), if management-cluster automation needs a kubeconfig Secret.
 5. [Manage addons](getting-started/manage-addons.md), if Helm-rendered applications should be applied through Omni manifest sync.
-6. [Manage Cilium](getting-started/install-cilium.md), if the cluster should receive Cilium through Omni manifest sync.
-7. [Configure NVIDIA GPU workers](getting-started/nvidia-gpu.md), if the cluster should run GPU workloads.
-8. [Plan GitOps ordering and deletion behavior](getting-started/gitops.md).
-9. [Check status and debug reconciliation](guides/debugging.md).
-10. Use the [API reference](reference/api.md) when writing manifests.
+6. [Understand direct Helm reconciliation](concepts/direct-helm-reconciliation.md), if add-ons need Helm release lifecycle in the workload cluster.
+7. [Manage Cilium](getting-started/install-cilium.md), if the cluster should receive Cilium through Omni manifest sync.
+8. [Configure NVIDIA GPU workers](getting-started/nvidia-gpu.md), if the cluster should run GPU workloads.
+9. [Plan GitOps ordering and deletion behavior](getting-started/gitops.md).
+10. [Check status and debug reconciliation](guides/debugging.md).
+11. Use the [API reference](reference/api.md) when writing manifests.
 
 ## Important model
 
@@ -47,6 +49,8 @@ flowchart LR
   Workers["OmniWorkers"] --> Cluster
   Machine["OmniMachine"] --> Cluster
   Addon["OmniClusterAddon"] --> Cluster
+  HelmRelease["OmniHelmRelease"] --> Export
+  HelmRelease --> Cluster
   Export["OmniKubeconfigExport"] --> Cluster
   Cluster --> Omni["Sidero Omni"]
 ```

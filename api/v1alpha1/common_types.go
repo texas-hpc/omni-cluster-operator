@@ -44,6 +44,8 @@ const (
 	ConditionSynced = "Synced"
 	// ConditionExported reports whether a requested generated artifact was written to its target Secret.
 	ConditionExported = "Exported"
+	// ConditionReleased reports whether a Helm release has been reconciled in a workload cluster.
+	ConditionReleased = "Released"
 
 	ReasonAccepted          = "Accepted"
 	ReasonConnectionReady   = "ConnectionReady"
@@ -56,6 +58,9 @@ const (
 	ReasonMissingConnection = "MissingConnection"
 	ReasonMissingSecret     = "MissingSecret"
 	ReasonMissingTemplate   = "MissingTemplate"
+	ReasonHelmInstalled     = "HelmInstalled"
+	ReasonHelmUninstalled   = "HelmUninstalled"
+	ReasonHelmUpgraded      = "HelmUpgraded"
 	ReasonReconcileFailed   = "ReconcileFailed"
 	ReasonRendered          = "Rendered"
 	ReasonRenderFailed      = "RenderFailed"

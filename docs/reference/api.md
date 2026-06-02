@@ -103,6 +103,33 @@ Defines a generic Helm-rendered manifest for one `OmniCluster`.
 
 Status includes rendered manifest Secret name, rendered manifest hash, manifest name, chart, chart version, and last render time.
 
+## OmniHelmRelease
+
+Reconciles a Helm release directly in an Omni-created workload cluster using an explicit kubeconfig Secret.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `spec.clusterRef.name` | Yes | `OmniCluster` in the same namespace. Used for attachment/status; it does not export credentials. |
+| `spec.kubeconfigSecretRef.name` | Yes | Secret in the same namespace containing workload-cluster kubeconfig data. |
+| `spec.kubeconfigSecretRef.key` | No | Secret data key. Defaults to `kubeconfig`. |
+| `spec.releaseName` | No | Helm release name. Defaults to `metadata.name`. |
+| `spec.namespace` | No | Workload-cluster release namespace. Defaults to `default`. |
+| `spec.chart.repository` | Yes | Helm repository URL. |
+| `spec.chart.chart` | Yes | Helm chart name to install or upgrade. |
+| `spec.chart.version` | Yes | Helm chart version to install or upgrade. |
+| `spec.chart.values` | No | Helm values object passed to install and upgrade. |
+| `spec.createNamespace` | No | Ask Helm to create the release namespace during install. |
+| `spec.wait` | No | Ask Helm to wait for reconciled resources to become ready. |
+| `spec.waitForJobs` | No | Include Jobs in Helm wait behavior. |
+| `spec.timeout` | No | Helm action timeout. Defaults to `5m`. |
+| `spec.atomic` | No | Roll back failed upgrades and uninstall failed installs when waiting. |
+| `spec.disableHooks` | No | Disable Helm hooks. |
+| `spec.skipCRDs` | No | Skip CRD installation. Helm does not upgrade CRDs. |
+| `spec.maxHistory` | No | Maximum retained Helm release revisions. Zero uses Helm's default. |
+| `spec.deletionPolicy` | No | `Uninstall` removes the workload-cluster release on CR deletion; `Orphan` leaves it behind. Defaults to `Uninstall`. |
+
+Status includes `Ready`, `Released`, release name, namespace, chart, chart version, release revision, release status, last Helm action, timestamps, last error, and observed generation.
+
 ## OmniKubeconfigExport
 
 Exports a scoped workload-cluster service-account kubeconfig into a Secret only when explicitly requested.

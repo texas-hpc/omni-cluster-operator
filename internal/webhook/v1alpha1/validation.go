@@ -30,6 +30,7 @@ import (
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 	"github.com/texas-hpc/omni-cluster-operator/internal/addon"
 	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
+	"github.com/texas-hpc/omni-cluster-operator/internal/helmrelease"
 )
 
 const validationGroup = "omni.texashpc.com"
@@ -178,6 +179,63 @@ func validateKubeconfigExport(item *omniv1alpha1.OmniKubeconfigExport) field.Err
 	}
 
 	return allErrs
+}
+
+func validateHelmRelease(item *omniv1alpha1.OmniHelmRelease) field.ErrorList {
+	specPath := field.NewPath("spec")
+	chartPath := specPath.Child("chart")
+	var allErrs field.ErrorList
+
+	if strings.TrimSpace(item.Spec.ClusterRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("clusterRef", "name"), "clusterRef.name is required"))
+	}
+	if strings.TrimSpace(item.Spec.KubeconfigSecretRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("kubeconfigSecretRef", "name"), "kubeconfig Secret name is required"))
+	}
+	if item.Spec.KubeconfigSecretRef.Key != "" && strings.TrimSpace(item.Spec.KubeconfigSecretRef.Key) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("kubeconfigSecretRef", "key"), "kubeconfig Secret key must not be blank"))
+	}
+	if strings.TrimSpace(item.Spec.ReleaseName) != item.Spec.ReleaseName {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("releaseName"), item.Spec.ReleaseName, "releaseName must not include leading or trailing whitespace"))
+	}
+	if strings.TrimSpace(item.Spec.Namespace) != item.Spec.Namespace {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("namespace"), item.Spec.Namespace, "namespace must not include leading or trailing whitespace"))
+	}
+	if strings.TrimSpace(item.Spec.Chart.Repository) == "" {
+		allErrs = append(allErrs, field.Required(chartPath.Child("repository"), "chart.repository is required"))
+	} else if !isAbsoluteURL(item.Spec.Chart.Repository) {
+		allErrs = append(allErrs, field.Invalid(chartPath.Child("repository"), item.Spec.Chart.Repository, "chart.repository must be an absolute URL"))
+	}
+	if strings.TrimSpace(item.Spec.Chart.Chart) == "" {
+		allErrs = append(allErrs, field.Required(chartPath.Child("chart"), "chart.chart is required"))
+	}
+	if strings.TrimSpace(item.Spec.Chart.Version) == "" {
+		allErrs = append(allErrs, field.Required(chartPath.Child("version"), "chart.version is required"))
+	}
+	if item.Spec.Timeout != nil && item.Spec.Timeout.Duration <= 0 {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("timeout"), item.Spec.Timeout.String(), "timeout must be greater than zero"))
+	}
+	if item.Spec.MaxHistory < 0 {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("maxHistory"), item.Spec.MaxHistory, "maxHistory must not be negative"))
+	}
+	switch helmrelease.DeletionPolicy(item) {
+	case omniv1alpha1.HelmReleaseDeletionPolicyUninstall, omniv1alpha1.HelmReleaseDeletionPolicyOrphan:
+	default:
+		allErrs = append(allErrs, field.NotSupported(specPath.Child("deletionPolicy"), item.Spec.DeletionPolicy, []string{"Uninstall", "Orphan"}))
+	}
+	if _, err := helmrelease.Values(item); err != nil {
+		allErrs = append(allErrs, field.Invalid(chartPath.Child("values"), item.Spec.Chart.Values, err.Error()))
+	}
+
+	return allErrs
+}
+
+func helmReleaseWarnings(item *omniv1alpha1.OmniHelmRelease) []string {
+	if item.Spec.KubeconfigSecretRef.Name == "" {
+		return nil
+	}
+
+	return []string{"OmniHelmRelease uses a workload-cluster kubeconfig Secret and writes directly to that cluster"}
 }
 
 func kubeconfigExportWarnings(item *omniv1alpha1.OmniKubeconfigExport) []string {

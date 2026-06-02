@@ -13,7 +13,7 @@ Install dependencies before applying cluster resources:
 5. `OmniConnection`
 6. `OmniCluster` and child resources
 
-The default operator watches only its release namespace. Put the `OmniConnection`, `OmniCluster`, `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, `OmniClusterAddon`, `OmniKubeconfigExport`, legacy `OmniCilium`, and referenced Secret in that namespace unless you have changed the deployment model.
+The default operator watches only its release namespace. Put the `OmniConnection`, `OmniCluster`, `OmniControlPlane`, `OmniWorkers`, `OmniMachine`, `OmniClusterAddon`, `OmniHelmRelease`, `OmniKubeconfigExport`, legacy `OmniCilium`, and referenced Secret in that namespace unless you have changed the deployment model.
 
 ## Secrets
 
@@ -103,6 +103,8 @@ For GitOps:
 - Bind the requested user or group in the workload cluster with normal Kubernetes RBAC.
 
 If a Flux or Argo application consumes the exported Secret, order that consumer after the `OmniKubeconfigExport` resource. The export can only become ready after the referenced `OmniCluster` and its `OmniConnection` are available and Omni can issue the service-account kubeconfig.
+
+`OmniHelmRelease` is one consumer of an exported kubeconfig Secret. Order it after the matching `OmniKubeconfigExport` and any workload-cluster RBAC that grants the exported user or group the permissions Helm needs.
 
 ## FluxCD notes
 

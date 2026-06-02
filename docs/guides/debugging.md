@@ -69,6 +69,7 @@ The chart installs validating webhooks. If `kubectl apply` fails before an objec
 - Invalid addon Helm repository, chart, version, or values shape.
 - Duplicate manifest names between `OmniCluster.spec.kubernetes.manifests[]`, `OmniClusterAddon.spec.manifestName`, and legacy `OmniCilium.spec.manifestName`.
 - Invalid `OmniKubeconfigExport` fields, such as blank service-account groups, `renewBefore` greater than or equal to `ttl`, or `system:masters` without `serviceAccount.allowClusterAdmin: true`.
+- Invalid `OmniHelmRelease` fields, such as malformed chart values, missing kubeconfig Secret references, or direct Helm credentials that do not have workload-cluster RBAC.
 
 ## Kubeconfig export issues
 

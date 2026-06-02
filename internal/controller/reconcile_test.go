@@ -41,6 +41,7 @@ import (
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 	"github.com/texas-hpc/omni-cluster-operator/internal/addon"
 	"github.com/texas-hpc/omni-cluster-operator/internal/cilium"
+	"github.com/texas-hpc/omni-cluster-operator/internal/helmrelease"
 	"github.com/texas-hpc/omni-cluster-operator/internal/kubeconfigexport"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
 )
@@ -54,6 +55,9 @@ const (
 	testGatewayName      = "gateway"
 	testOtherClusterName = "other"
 	testOldKubeconfigKey = "old-kubeconfig"
+	testHelmReleaseName  = "metrics-server"
+	testHelmNamespace    = "kube-system"
+	testHelmChartVersion = "3.13.0"
 )
 
 type fakeOmni struct {
@@ -84,6 +88,18 @@ type fakeAddonRenderer struct {
 	err      error
 }
 
+type fakeHelmReleaseClient struct {
+	reconcileResult  *helmrelease.Result
+	reconcileErr     error
+	reconcileCalls   int
+	reconcileConfigs [][]byte
+
+	uninstallResult  *helmrelease.Result
+	uninstallErr     error
+	uninstallCalls   int
+	uninstallConfigs [][]byte
+}
+
 func (f *fakeCiliumRenderer) Render(context.Context, *omniv1alpha1.OmniCilium) ([]byte, bool, error) {
 	f.calls++
 	return append([]byte(nil), f.manifest...), true, f.err
@@ -92,6 +108,42 @@ func (f *fakeCiliumRenderer) Render(context.Context, *omniv1alpha1.OmniCilium) (
 func (f *fakeAddonRenderer) Render(context.Context, *omniv1alpha1.OmniClusterAddon) ([]byte, error) {
 	f.calls++
 	return append([]byte(nil), f.manifest...), f.err
+}
+
+func (f *fakeHelmReleaseClient) Reconcile(_ context.Context, _ *omniv1alpha1.OmniHelmRelease, kubeconfig []byte) (*helmrelease.Result, error) {
+	f.reconcileCalls++
+	f.reconcileConfigs = append(f.reconcileConfigs, append([]byte(nil), kubeconfig...))
+	if f.reconcileResult == nil {
+		f.reconcileResult = &helmrelease.Result{
+			Action:       helmrelease.ActionInstall,
+			ReleaseName:  testHelmReleaseName,
+			Namespace:    testHelmNamespace,
+			Chart:        testHelmReleaseName,
+			ChartVersion: testHelmChartVersion,
+			Revision:     1,
+			Status:       helmrelease.StatusDeployed,
+		}
+	}
+
+	return f.reconcileResult, f.reconcileErr
+}
+
+func (f *fakeHelmReleaseClient) Uninstall(_ context.Context, _ *omniv1alpha1.OmniHelmRelease, kubeconfig []byte) (*helmrelease.Result, error) {
+	f.uninstallCalls++
+	f.uninstallConfigs = append(f.uninstallConfigs, append([]byte(nil), kubeconfig...))
+	if f.uninstallResult == nil {
+		f.uninstallResult = &helmrelease.Result{
+			Action:       helmrelease.ActionUninstall,
+			ReleaseName:  testHelmReleaseName,
+			Namespace:    testHelmNamespace,
+			Chart:        testHelmReleaseName,
+			ChartVersion: testHelmChartVersion,
+			Revision:     2,
+			Status:       helmrelease.StatusUninstalled,
+		}
+	}
+
+	return f.uninstallResult, f.uninstallErr
 }
 
 func (f *fakeOmni) Ping(_ context.Context, connection *omniv1alpha1.OmniConnection) (string, error) {
@@ -1210,6 +1262,315 @@ func TestOmniClusterWaitsForPendingCiliumRender(t *testing.T) {
 	}
 }
 
+func TestOmniHelmReleaseInstallsDirectRelease(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	item := testHelmRelease()
+	secret := testHelmReleaseKubeconfigSecret(item, testKubeconfigBytes("helm-token"))
+	helm := &fakeHelmReleaseClient{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
+		WithObjects(testCluster(), item, secret).
+		Build()
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if helm.reconcileCalls != 0 {
+		t.Fatalf("reconcileCalls after finalizer = %d, want 0", helm.reconcileCalls)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+	if helm.reconcileCalls != 1 {
+		t.Fatalf("reconcileCalls = %d, want 1", helm.reconcileCalls)
+	}
+	if got := string(helm.reconcileConfigs[0]); !strings.Contains(got, "helm-token") {
+		t.Fatalf("kubeconfig passed to Helm missing token: %s", got)
+	}
+
+	updated := &omniv1alpha1.OmniHelmRelease{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get helm release: %v", err)
+	}
+	if updated.Status.LastAction != helmrelease.ActionInstall {
+		t.Fatalf("LastAction = %q, want %q", updated.Status.LastAction, helmrelease.ActionInstall)
+	}
+	if updated.Status.ReleaseRevision != 1 {
+		t.Fatalf("ReleaseRevision = %d, want 1", updated.Status.ReleaseRevision)
+	}
+	if updated.Status.LastSuccessTime == nil {
+		t.Fatal("LastSuccessTime is nil")
+	}
+	if updated.Status.LastError != "" {
+		t.Fatalf("LastError = %q, want empty", updated.Status.LastError)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionAccepted); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Accepted condition = %#v, want True", got)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReleased); got == nil || got.Status != metav1.ConditionTrue || got.Reason != omniv1alpha1.ReasonHelmInstalled {
+		t.Fatalf("Released condition = %#v, want True/%s", got, omniv1alpha1.ReasonHelmInstalled)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Ready condition = %#v, want True", got)
+	}
+}
+
+func TestOmniHelmReleaseReportsUpgradeStatus(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	item := testHelmRelease()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	secret := testHelmReleaseKubeconfigSecret(item, testKubeconfigBytes("helm-token"))
+	helm := &fakeHelmReleaseClient{
+		reconcileResult: &helmrelease.Result{
+			Action:       helmrelease.ActionUpgrade,
+			ReleaseName:  testHelmReleaseName,
+			Namespace:    testHelmNamespace,
+			Chart:        testHelmReleaseName,
+			ChartVersion: "3.14.0",
+			Revision:     4,
+			Status:       helmrelease.StatusDeployed,
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
+		WithObjects(testCluster(), item, secret).
+		Build()
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if helm.reconcileCalls != 1 {
+		t.Fatalf("reconcileCalls = %d, want 1", helm.reconcileCalls)
+	}
+
+	updated := &omniv1alpha1.OmniHelmRelease{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, updated); err != nil {
+		t.Fatalf("get helm release: %v", err)
+	}
+	if updated.Status.LastAction != helmrelease.ActionUpgrade {
+		t.Fatalf("LastAction = %q, want %q", updated.Status.LastAction, helmrelease.ActionUpgrade)
+	}
+	if updated.Status.ReleaseRevision != 4 {
+		t.Fatalf("ReleaseRevision = %d, want 4", updated.Status.ReleaseRevision)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReleased); got == nil || got.Status != metav1.ConditionTrue || got.Reason != omniv1alpha1.ReasonHelmUpgraded {
+		t.Fatalf("Released condition = %#v, want True/%s", got, omniv1alpha1.ReasonHelmUpgraded)
+	}
+}
+
+func TestOmniHelmReleaseReportsHelmFailure(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name   string
+		action string
+	}{
+		{name: "install", action: helmrelease.ActionInstall},
+		{name: "upgrade", action: helmrelease.ActionUpgrade},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			item := testHelmRelease()
+			item.Finalizers = []string{omniv1alpha1.Finalizer}
+			secret := testHelmReleaseKubeconfigSecret(item, testKubeconfigBytes("helm-token"))
+			helm := &fakeHelmReleaseClient{
+				reconcileResult: &helmrelease.Result{
+					Action:       tt.action,
+					ReleaseName:  testHelmReleaseName,
+					Namespace:    testHelmNamespace,
+					Chart:        testHelmReleaseName,
+					ChartVersion: testHelmChartVersion,
+					Revision:     3,
+					Status:       "failed",
+				},
+				reconcileErr: errors.New("helm action failed"),
+			}
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
+				WithObjects(testCluster(), item, secret).
+				Build()
+			reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+
+			if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err == nil || !strings.Contains(err.Error(), "helm action failed") {
+				t.Fatalf("Reconcile() error = %v, want helm action failed", err)
+			}
+
+			updated := &omniv1alpha1.OmniHelmRelease{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, updated); err != nil {
+				t.Fatalf("get helm release: %v", err)
+			}
+			if updated.Status.LastAction != tt.action {
+				t.Fatalf("LastAction = %q, want %q", updated.Status.LastAction, tt.action)
+			}
+			if updated.Status.LastError != "helm action failed" {
+				t.Fatalf("LastError = %q, want helm action failed", updated.Status.LastError)
+			}
+			if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse || got.Reason != omniv1alpha1.ReasonReconcileFailed {
+				t.Fatalf("Ready condition = %#v, want False/%s", got, omniv1alpha1.ReasonReconcileFailed)
+			}
+		})
+	}
+}
+
+func TestOmniHelmReleaseWaitsForClusterAndCredentials(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name       string
+		objects    []client.Object
+		wantReason string
+	}{
+		{
+			name:       "missing cluster",
+			objects:    nil,
+			wantReason: omniv1alpha1.ReasonMissingCluster,
+		},
+		{
+			name:       "missing kubeconfig secret",
+			objects:    []client.Object{testCluster()},
+			wantReason: omniv1alpha1.ReasonMissingSecret,
+		},
+		{
+			name: "missing kubeconfig key",
+			objects: []client.Object{
+				testCluster(),
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: "edge-helm-kubeconfig", Namespace: testNamespace},
+					Data:       map[string][]byte{"other": testKubeconfigBytes("helm-token")},
+				},
+			},
+			wantReason: omniv1alpha1.ReasonMissingSecret,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			item := testHelmRelease()
+			item.Finalizers = []string{omniv1alpha1.Finalizer}
+			objects := append([]client.Object{item}, tt.objects...)
+			helm := &fakeHelmReleaseClient{}
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
+				WithObjects(objects...).
+				Build()
+			reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if result.RequeueAfter != helmReleaseRetryInterval {
+				t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, helmReleaseRetryInterval)
+			}
+			if helm.reconcileCalls != 0 {
+				t.Fatalf("reconcileCalls = %d, want 0", helm.reconcileCalls)
+			}
+
+			updated := &omniv1alpha1.OmniHelmRelease{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, updated); err != nil {
+				t.Fatalf("get helm release: %v", err)
+			}
+			if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse || got.Reason != tt.wantReason {
+				t.Fatalf("Ready condition = %#v, want False/%s", got, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestOmniHelmReleaseDeleteUninstallsRelease(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	deletionTime := metav1.Now()
+	item := testHelmRelease()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	item.DeletionTimestamp = &deletionTime
+	secret := testHelmReleaseKubeconfigSecret(item, testKubeconfigBytes("helm-token"))
+	helm := &fakeHelmReleaseClient{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
+		WithObjects(testCluster(), item, secret).
+		Build()
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if helm.uninstallCalls != 1 {
+		t.Fatalf("uninstallCalls = %d, want 1", helm.uninstallCalls)
+	}
+
+	updated := &omniv1alpha1.OmniHelmRelease{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, updated)
+	if apierrors.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("get helm release: %v", err)
+	}
+	if len(updated.Finalizers) != 0 {
+		t.Fatalf("finalizers = %#v, want empty", updated.Finalizers)
+	}
+}
+
+func TestOmniHelmReleaseDeleteCanOrphanRelease(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	deletionTime := metav1.Now()
+	item := testHelmRelease()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	item.DeletionTimestamp = &deletionTime
+	item.Spec.DeletionPolicy = omniv1alpha1.HelmReleaseDeletionPolicyOrphan
+	helm := &fakeHelmReleaseClient{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
+		WithObjects(testCluster(), item).
+		Build()
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if helm.uninstallCalls != 0 {
+		t.Fatalf("uninstallCalls = %d, want 0", helm.uninstallCalls)
+	}
+
+	updated := &omniv1alpha1.OmniHelmRelease{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, updated)
+	if apierrors.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("get helm release: %v", err)
+	}
+	if len(updated.Finalizers) != 0 {
+		t.Fatalf("finalizers = %#v, want empty", updated.Finalizers)
+	}
+}
+
 func TestOmniKubeconfigExportWritesServiceAccountSecret(t *testing.T) {
 	t.Parallel()
 
@@ -2010,10 +2371,34 @@ func testAddon() *omniv1alpha1.OmniClusterAddon {
 			Mode:         "full",
 			Helm: omniv1alpha1.OmniClusterAddonHelmSpec{
 				Repository:  "https://charts.example.test/",
-				Chart:       "metrics-server",
-				Version:     "3.13.0",
-				ReleaseName: "metrics-server",
-				Namespace:   "kube-system",
+				Chart:       testHelmReleaseName,
+				Version:     testHelmChartVersion,
+				ReleaseName: testHelmReleaseName,
+				Namespace:   testHelmNamespace,
+			},
+		},
+	}
+}
+
+func testHelmRelease() *omniv1alpha1.OmniHelmRelease {
+	return &omniv1alpha1.OmniHelmRelease{
+		ObjectMeta: metav1.ObjectMeta{Name: "metrics-release", Namespace: testNamespace},
+		Spec: omniv1alpha1.OmniHelmReleaseSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
+			KubeconfigSecretRef: omniv1alpha1.HelmReleaseKubeconfigSecretRef{
+				Name: "edge-helm-kubeconfig",
+			},
+			ReleaseName:     testHelmReleaseName,
+			Namespace:       testHelmNamespace,
+			CreateNamespace: true,
+			Wait:            true,
+			WaitForJobs:     true,
+			Timeout:         &metav1.Duration{Duration: 10 * time.Minute},
+			Atomic:          true,
+			Chart: omniv1alpha1.OmniHelmChartSpec{
+				Repository: "https://kubernetes-sigs.github.io/metrics-server/",
+				Chart:      testHelmReleaseName,
+				Version:    testHelmChartVersion,
 			},
 		},
 	}
@@ -2080,6 +2465,16 @@ func currentKubeconfigExportSecret(t *testing.T, item *omniv1alpha1.OmniKubeconf
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			kubeconfigexport.TargetSecretKey(item): data,
+		},
+	}
+}
+
+func testHelmReleaseKubeconfigSecret(item *omniv1alpha1.OmniHelmRelease, data []byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: item.Spec.KubeconfigSecretRef.Name, Namespace: item.Namespace},
+		Type:       corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			helmrelease.KubeconfigSecretKey(item): data,
 		},
 	}
 }

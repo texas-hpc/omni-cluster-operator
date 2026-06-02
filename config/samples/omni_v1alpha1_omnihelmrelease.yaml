@@ -1,0 +1,24 @@
+apiVersion: omni.texashpc.com/v1alpha1
+kind: OmniHelmRelease
+metadata:
+  labels:
+    app.kubernetes.io/name: omni-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: edge-sample-metrics-server
+  namespace: omni-cluster-operator-system
+spec:
+  clusterRef:
+    name: edge-sample
+  kubeconfigSecretRef:
+    name: edge-sample-automation-kubeconfig
+  releaseName: metrics-server
+  namespace: kube-system
+  wait: true
+  timeout: 5m
+  deletionPolicy: Uninstall
+  chart:
+    repository: https://kubernetes-sigs.github.io/metrics-server/
+    chart: metrics-server
+    version: 3.13.0
+    values:
+      replicas: 2

@@ -136,6 +136,26 @@ webhooks:
       service:
         name: {{ include "omni-cluster-operator.webhookServiceName" . }}
         namespace: {{ .Release.Namespace }}
+        path: /validate-omni-texashpc-com-v1alpha1-omnihelmrelease
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    name: vomnihelmrelease-v1alpha1.kb.io
+    rules:
+      - apiGroups:
+          - omni.texashpc.com
+        apiVersions:
+          - v1alpha1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - omnihelmreleases
+    sideEffects: None
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: {{ include "omni-cluster-operator.webhookServiceName" . }}
+        namespace: {{ .Release.Namespace }}
         path: /validate-omni-texashpc-com-v1alpha1-omnimachine
     failurePolicy: {{ .Values.webhook.failurePolicy }}
     name: vomnimachine-v1alpha1.kb.io
