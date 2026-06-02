@@ -39,8 +39,6 @@ type Inputs struct {
 	ControlPlane *omniv1alpha1.OmniControlPlane
 	Workers      []omniv1alpha1.OmniWorkers
 	Machines     []omniv1alpha1.OmniMachine
-	Addons       []AddonInput
-	Cilium       *CiliumInput
 }
 
 // Result is a rendered Omni cluster template and metadata derived from it.
@@ -51,25 +49,6 @@ type Result struct {
 	ControlPlaneRef string
 	WorkersRefs     []string
 	MachineRefs     []string
-	AddonRefs       []string
-	CiliumRef       string
-}
-
-// AddonInput is a rendered generic addon to include in an Omni cluster template.
-type AddonInput struct {
-	ResourceName string
-	ManifestName string
-	Mode         string
-	Manifest     []apiextensionsv1.JSON
-}
-
-// CiliumInput is a rendered Cilium installation to include in an Omni cluster template.
-type CiliumInput struct {
-	ResourceName         string
-	ManifestName         string
-	Mode                 string
-	Manifest             []apiextensionsv1.JSON
-	KubeProxyReplacement bool
 }
 
 type clusterDoc struct {
@@ -183,8 +162,6 @@ type installDoc struct {
 	Disk string `yaml:"disk"`
 }
 
-const defaultManifestMode = "full"
-
 // Render renders a complete Omni multi-document cluster template.
 func Render(in Inputs) (*Result, error) {
 	if in.Cluster == nil {
@@ -205,30 +182,15 @@ func Render(in Inputs) (*Result, error) {
 		return machineID(&machines[i]) < machineID(&machines[j])
 	})
 
-	addons := append([]AddonInput(nil), in.Addons...)
-	sort.Slice(addons, func(i, j int) bool {
-		if addons[i].ManifestName == addons[j].ManifestName {
-			return addons[i].ResourceName < addons[j].ResourceName
-		}
-
-		return addons[i].ManifestName < addons[j].ManifestName
-	})
-
 	clusterName := ClusterName(in.Cluster)
-	if err := validateManifestNames(in.Cluster, addons, in.Cilium); err != nil {
+	if err := validateManifestNames(in.Cluster); err != nil {
 		return nil, err
 	}
 
-	docs := []any{renderCluster(in.Cluster, clusterName, addons, in.Cilium), renderControlPlane(in.ControlPlane)}
+	docs := []any{renderCluster(in.Cluster, clusterName), renderControlPlane(in.ControlPlane)}
 	result := &Result{
 		ClusterName:     clusterName,
 		ControlPlaneRef: in.ControlPlane.Name,
-	}
-	for _, item := range addons {
-		result.AddonRefs = append(result.AddonRefs, item.ResourceName)
-	}
-	if in.Cilium != nil {
-		result.CiliumRef = in.Cilium.ResourceName
 	}
 
 	for i := range workers {
@@ -299,17 +261,7 @@ func ClusterName(cluster *omniv1alpha1.OmniCluster) string {
 	return cluster.Name
 }
 
-func renderCluster(cluster *omniv1alpha1.OmniCluster, clusterName string, addons []AddonInput, cilium *CiliumInput) clusterDoc {
-	patches := append([]omniv1alpha1.Patch(nil), cluster.Spec.Patches...)
-	manifests := append([]omniv1alpha1.KubernetesManifest(nil), cluster.Spec.Kubernetes.Manifests...)
-	for _, item := range addons {
-		manifests = append(manifests, addonManifest(&item))
-	}
-	if cilium != nil {
-		patches = append(patches, ciliumPatch(cilium))
-		manifests = append(manifests, ciliumManifest(cilium))
-	}
-
+func renderCluster(cluster *omniv1alpha1.OmniCluster, clusterName string) clusterDoc {
 	return clusterDoc{
 		Kind:        "Cluster",
 		Name:        clusterName,
@@ -317,32 +269,20 @@ func renderCluster(cluster *omniv1alpha1.OmniCluster, clusterName string, addons
 		Annotations: cluster.Spec.Annotations,
 		Kubernetes: kubernetesDoc{
 			Version:  cluster.Spec.Kubernetes.Version,
-			Manifest: renderManifests(manifests),
+			Manifest: renderManifests(cluster.Spec.Kubernetes.Manifests),
 		},
 		Talos:            talosDoc{Version: cluster.Spec.Talos.Version},
 		Features:         renderFeatures(cluster.Spec.Features),
-		Patches:          renderPatches(patches),
+		Patches:          renderPatches(cluster.Spec.Patches),
 		SystemExtensions: cluster.Spec.SystemExtensions,
 		KernelArgs:       cluster.Spec.KernelArgs,
 	}
 }
 
-func validateManifestNames(cluster *omniv1alpha1.OmniCluster, addons []AddonInput, cilium *CiliumInput) error {
+func validateManifestNames(cluster *omniv1alpha1.OmniCluster) error {
 	owners := map[string]string{}
 	for _, existing := range cluster.Spec.Kubernetes.Manifests {
 		if err := claimManifestName(owners, existing.Name, "OmniCluster.spec.kubernetes.manifests[]"); err != nil {
-			return err
-		}
-	}
-
-	for _, item := range addons {
-		if err := claimManifestName(owners, addonManifest(&item).Name, fmt.Sprintf("OmniClusterAddon %q", item.ResourceName)); err != nil {
-			return err
-		}
-	}
-
-	if cilium != nil {
-		if err := claimManifestName(owners, ciliumManifest(cilium).Name, fmt.Sprintf("OmniCilium %q", cilium.ResourceName)); err != nil {
 			return err
 		}
 	}
@@ -357,57 +297,6 @@ func claimManifestName(owners map[string]string, name, owner string) error {
 
 	owners[name] = owner
 	return nil
-}
-
-func addonManifest(item *AddonInput) omniv1alpha1.KubernetesManifest {
-	mode := item.Mode
-	if mode == "" {
-		mode = defaultManifestMode
-	}
-
-	return omniv1alpha1.KubernetesManifest{
-		Name:   item.ManifestName,
-		Mode:   mode,
-		Inline: item.Manifest,
-	}
-}
-
-func ciliumPatch(cilium *CiliumInput) omniv1alpha1.Patch {
-	inline := map[string]any{
-		"cluster": map[string]any{
-			"network": map[string]any{
-				"cni": map[string]any{
-					"name": "none",
-				},
-			},
-		},
-	}
-	if cilium.KubeProxyReplacement {
-		cluster := inline["cluster"].(map[string]any)
-		cluster["proxy"] = map[string]any{
-			"disabled": true,
-		}
-	}
-
-	raw, _ := json.Marshal(inline)
-
-	return omniv1alpha1.Patch{
-		Name:   "disable-default-cni-for-cilium",
-		Inline: &apiextensionsv1.JSON{Raw: raw},
-	}
-}
-
-func ciliumManifest(cilium *CiliumInput) omniv1alpha1.KubernetesManifest {
-	mode := cilium.Mode
-	if mode == "" {
-		mode = defaultManifestMode
-	}
-
-	return omniv1alpha1.KubernetesManifest{
-		Name:   cilium.ManifestName,
-		Mode:   mode,
-		Inline: cilium.Manifest,
-	}
 }
 
 func renderControlPlane(controlPlane *omniv1alpha1.OmniControlPlane) controlPlaneDoc {

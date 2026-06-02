@@ -60,10 +60,10 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		By("deleting Omni test resources")
-		_, _ = utils.Run(exec.Command("kubectl", "delete",
-			"omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniclusteraddons,omniciliums,omniconnections",
-			"--all", "-n", namespace, "--ignore-not-found", "--timeout=60s"))
+			By("deleting Omni test resources")
+			_, _ = utils.Run(exec.Command("kubectl", "delete",
+				"omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniconnections",
+				"--all", "-n", namespace, "--ignore-not-found", "--timeout=60s"))
 
 		By("undeploying the controller-manager")
 		cmd := exec.Command("mise", "run", "undeploy")
@@ -256,8 +256,8 @@ spec:
   machineClass:
     name: worker
     size: unlimited
-`)
-		Expect(err).NotTo(HaveOccurred())
+	`)
+			Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func(g Gomega) {
 			output, err := utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-suspended",
@@ -272,26 +272,12 @@ spec:
 		}).Should(Succeed())
 	})
 
-	It("marks child template documents that reference a missing cluster", func() {
-		_, err := kubectlApply(`
-apiVersion: omni.texashpc.com/v1alpha1
-kind: OmniClusterAddon
-metadata:
-  name: e2e-missing-cluster-addon
-  namespace: omni-cluster-operator-system
-spec:
-  clusterRef:
-    name: does-not-exist
-  manifestName: missing-addon
-  helm:
-    repository: https://charts.example.test/
-    chart: missing
-    version: 1.0.0
----
-apiVersion: omni.texashpc.com/v1alpha1
-kind: OmniMachine
-metadata:
-  name: e2e-missing-cluster-machine
+		It("marks child template documents that reference a missing cluster", func() {
+			_, err := kubectlApply(`
+	apiVersion: omni.texashpc.com/v1alpha1
+	kind: OmniMachine
+	metadata:
+	  name: e2e-missing-cluster-machine
   namespace: omni-cluster-operator-system
 spec:
   clusterRef:
@@ -304,16 +290,10 @@ spec:
 			output, err := utils.Run(exec.Command("kubectl", "get", "omnimachine",
 				"e2e-missing-cluster-machine", "-n", namespace,
 				"-o", "jsonpath={.status.conditions[?(@.type=='Accepted')].reason}"))
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(output).To(Equal("MissingCluster"))
-
-			output, err = utils.Run(exec.Command("kubectl", "get", "omniclusteraddon",
-				"e2e-missing-cluster-addon", "-n", namespace,
-				"-o", "jsonpath={.status.conditions[?(@.type=='Accepted')].reason}"))
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(output).To(Equal("MissingCluster"))
-		}).Should(Succeed())
-	})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("MissingCluster"))
+			}).Should(Succeed())
+		})
 })
 
 func kubectlApply(manifest string) (string, error) {

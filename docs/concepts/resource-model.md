@@ -11,10 +11,8 @@ The API group is `omni.texashpc.com/v1alpha1`.
 | `OmniControlPlane` | Defines the Omni `ControlPlane` template document for one cluster. Exactly one should reference each `OmniCluster`. |
 | `OmniWorkers` | Defines an Omni `Workers` template document. Multiple worker sets may reference the same cluster. |
 | `OmniMachine` | Defines optional per-machine template settings for static machines. |
-| `OmniClusterAddon` | Defines an optional Helm-rendered manifest injected into one `OmniCluster` template. |
 | `OmniHelmRelease` | Reconciles a Helm release directly in a workload cluster using an explicit kubeconfig Secret. |
 | `OmniKubeconfigExport` | Explicitly exports and rotates a workload-cluster service-account kubeconfig Secret. |
-| `OmniCilium` | Legacy compatibility resource for Cilium rendering. New manifests should prefer `OmniClusterAddon` plus explicit Talos patches. |
 
 ## Namespace ownership
 
@@ -27,10 +25,8 @@ Keep these objects in the release namespace:
 - `OmniControlPlane`
 - `OmniWorkers`
 - `OmniMachine`
-- `OmniClusterAddon`
 - `OmniHelmRelease`
 - `OmniKubeconfigExport`
-- `OmniCilium`
 - The Secret referenced by `OmniConnection.spec.auth.serviceAccountSecretRef`
 
 ## References

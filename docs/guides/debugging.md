@@ -5,7 +5,7 @@ Start with Kubernetes status, then inspect operator logs, then compare with Omni
 ## Check resources
 
 ```sh
-kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniclusteraddons,omnikubeconfigexports,omniciliums \
+kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines,omnikubeconfigexports,omnihelmreleases \
   --namespace omni-cluster-operator-system
 ```
 
@@ -21,7 +21,7 @@ kubectl describe omnicluster edge \
 kubectl describe omnikubeconfigexport cluster-01-automation-kubeconfig \
   --namespace omni-cluster-operator-system
 
-kubectl describe omnicilium edge-cilium \
+kubectl describe omnihelmrelease cluster-01-metrics-server \
   --namespace omni-cluster-operator-system
 ```
 
@@ -66,8 +66,7 @@ The chart installs validating webhooks. If `kubectl apply` fails before an objec
 - Reserved worker set name `control-planes`.
 - Invalid version strings.
 - Ambiguous inline and file-backed patch or manifest sources.
-- Invalid addon Helm repository, chart, version, or values shape.
-- Duplicate manifest names between `OmniCluster.spec.kubernetes.manifests[]`, `OmniClusterAddon.spec.manifestName`, and legacy `OmniCilium.spec.manifestName`.
+- Duplicate names in `OmniCluster.spec.kubernetes.manifests[]`.
 - Invalid `OmniKubeconfigExport` fields, such as blank service-account groups, `renewBefore` greater than or equal to `ttl`, or `system:masters` without `serviceAccount.allowClusterAdmin: true`.
 - Invalid `OmniHelmRelease` fields, such as malformed chart values, missing kubeconfig Secret references, or direct Helm credentials that do not have workload-cluster RBAC.
 
@@ -98,21 +97,21 @@ Common causes:
 - `ExportFailed`: Omni rejected the service-account kubeconfig request, credentials are invalid, or Omni returned data that is not a kubeconfig.
 - Secret consumers are reading the wrong key. The default key is `kubeconfig`; custom keys come from `spec.targetSecretRef.key`.
 
-## Addon render issues
+## Direct Helm issues
 
-`OmniClusterAddon` renders a Helm chart and caches the YAML in a Secret before `OmniCluster` syncs it to Omni. Legacy `OmniCilium` uses the same pattern.
+`OmniHelmRelease` reads a workload-cluster kubeconfig Secret and runs Helm actions directly in that cluster.
 
-If the parent `OmniCluster` is waiting on an addon, check:
+If a release is not ready, check the release and the referenced Secret:
 
 ```sh
-kubectl get omniclusteraddons,omniciliums,secrets \
+kubectl get omnihelmreleases,secrets \
   --namespace omni-cluster-operator-system
 
-kubectl describe omniclusteraddon cluster-01-cilium \
+kubectl describe omnihelmrelease cluster-01-metrics-server \
   --namespace omni-cluster-operator-system
 ```
 
-Generic addon rendered manifest Secrets are named `<omniclusteraddon-name>-addon-manifest`. Legacy Cilium Secrets are named `<omnicilium-name>-cilium-manifest`. Render failures usually point to an invalid chart version, unreachable chart repository, or invalid values.
+Common causes are missing kubeconfig Secret data, insufficient workload-cluster RBAC for the exported user or group, unreachable chart repositories, invalid chart versions, invalid values, or Helm wait timeouts.
 
 ## Stuck deletion
 

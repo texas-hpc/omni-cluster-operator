@@ -37,8 +37,6 @@ nav:
       - Installation: getting-started/installation.md
       - Cluster Lifecycle: getting-started/create-a-cluster.md
       - Workload Access: getting-started/workload-access.md
-      - Manage Addons: getting-started/manage-addons.md
-      - Manage Cilium: getting-started/install-cilium.md
       - NVIDIA GPU Workloads: getting-started/nvidia-gpu.md
       - GitOps: getting-started/gitops.md
       - Upgrading: getting-started/upgrading.md

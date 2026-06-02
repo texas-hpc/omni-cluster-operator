@@ -22,15 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the omni-cluster-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- omniclusteraddon_admin_role.yaml
-- omniclusteraddon_editor_role.yaml
-- omniclusteraddon_viewer_role.yaml
 - omnihelmrelease_admin_role.yaml
 - omnihelmrelease_editor_role.yaml
 - omnihelmrelease_viewer_role.yaml
-- omnicilium_admin_role.yaml
-- omnicilium_editor_role.yaml
-- omnicilium_viewer_role.yaml
 - omniworkers_admin_role.yaml
 - omniworkers_editor_role.yaml
 - omniworkers_viewer_role.yaml

@@ -2,23 +2,21 @@
 
 `OmniHelmRelease` is the opt-in path for reconciling a Helm release directly in an Omni-created workload cluster.
 
-Use it when an add-on should have normal Helm release lifecycle semantics: release history, revision status, hooks, wait behavior, upgrades, rollback-on-failure, and uninstall on deletion.
+Use it when a chart should have normal Helm release lifecycle semantics: release history, revision status, hooks, wait behavior, upgrades, rollback-on-failure, and uninstall on deletion.
 
-Use `OmniClusterAddon` instead when you want Helm only as a renderer and you want Omni manifest sync to apply the resulting raw Kubernetes objects through the cluster template.
+Use `OmniCluster.spec.kubernetes.manifests` when you want Omni manifest sync to apply raw Kubernetes objects through the cluster template.
 
 ## Design decision
 
-The direct Helm path is a separate CRD rather than a mode on `OmniClusterAddon`.
-
-`OmniClusterAddon` is part of the Omni template model. It renders a chart, stores the YAML in a management-cluster Secret, and the parent `OmniCluster` injects that YAML into `spec.kubernetes.manifests`.
+The direct Helm path is a separate CRD rather than a field on `OmniCluster` because it is not part of the Omni template model.
 
 `OmniHelmRelease` is not part of the Omni template. It reads an explicit workload-cluster kubeconfig Secret, connects to the workload cluster, and runs Helm install, upgrade, status, and uninstall actions there.
 
-Keeping these as separate resources avoids mixing two different sources of lifecycle truth in one API.
+Keeping raw manifest sync and direct Helm reconciliation separate avoids mixing two different sources of lifecycle truth in one API.
 
-| Resource | Workload-cluster credentials | Source of lifecycle truth | Delete behavior |
+| Resource path | Workload-cluster credentials | Source of lifecycle truth | Delete behavior |
 | --- | --- | --- | --- |
-| `OmniClusterAddon` | Not required | Omni manifest sync | Removes the manifest entry from the Omni template; uninstall depends on Omni manifest sync mode. |
+| `OmniCluster.spec.kubernetes.manifests` | Not required | Omni manifest sync | Removes the manifest entry from the Omni template; workload-cluster cleanup depends on Omni manifest sync behavior. |
 | `OmniHelmRelease` | Required | Helm release state in the workload cluster | Runs `helm uninstall` by default, or orphans the release when requested. |
 
 ## Credential boundary
@@ -100,14 +98,14 @@ spec:
       replicas: 2
 ```
 
-## Migration from manifest-sync add-ons
+## Migration from raw manifest sync
 
-Do not point `OmniClusterAddon` and `OmniHelmRelease` at the same application at the same time unless you have a deliberate handoff plan.
+Do not manage the same application through raw Omni manifest sync and `OmniHelmRelease` at the same time unless you have a deliberate handoff plan.
 
 A typical migration is:
 
 1. Create a scoped kubeconfig export and workload-cluster RBAC for Helm.
-2. Remove or disable the `OmniClusterAddon` manifest-sync entry.
+2. Remove or disable the raw manifest-sync entry in `OmniCluster.spec.kubernetes.manifests`.
 3. Verify Omni has stopped managing those rendered objects.
 4. Create `OmniHelmRelease` for the same chart, release name, namespace, and values.
 5. Confirm the `Released` and `Ready` conditions and inspect Helm release history in the workload cluster.

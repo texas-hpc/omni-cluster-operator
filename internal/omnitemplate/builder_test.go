@@ -34,9 +34,6 @@ const (
 	builderControlPlaneName = "edge-control-plane"
 	testKubernetesVersion   = "v1.35.0"
 	testTalosVersion        = "v1.13.2"
-	testAddonManifestName   = "metrics"
-	testAddonResourceName   = "metrics-addon"
-	testCiliumManifestName  = "cilium"
 	testManifestMode        = "full"
 )
 
@@ -96,15 +93,6 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 			machine(controlPlaneID, staticClusterName),
 			machine(workerID, staticClusterName),
 		},
-		Cilium: &CiliumInput{
-			ResourceName:         "edge-cilium",
-			ManifestName:         testCiliumManifestName,
-			Mode:                 testManifestMode,
-			KubeProxyReplacement: true,
-			Manifest: []apiextensionsv1.JSON{{
-				Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"kube-system"}}`),
-			}},
-		},
 	})
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
@@ -120,9 +108,6 @@ func TestRenderAndValidateStaticTemplate(t *testing.T) {
 		"kind: Machine",
 		"maxParallelism: 2",
 		"kind: Namespace",
-		"disable-default-cni-for-cilium",
-		"proxy:",
-		"disabled: true",
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered template missing %q:\n%s", want, rendered)
@@ -279,194 +264,6 @@ func TestRenderAndValidateMultipleWorkerSets(t *testing.T) {
 
 	if err := Validate(result.Template, ""); err != nil {
 		t.Fatalf("Validate() error = %v\n%s", err, rendered)
-	}
-}
-
-func TestRenderIncludesGenericAddons(t *testing.T) {
-	t.Parallel()
-
-	result, err := Render(Inputs{
-		Cluster: &omniv1alpha1.OmniCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: staticClusterName},
-			Spec: omniv1alpha1.OmniClusterSpec{
-				Kubernetes: omniv1alpha1.KubernetesSpec{Version: testKubernetesVersion},
-				Talos:      omniv1alpha1.TalosSpec{Version: testTalosVersion},
-			},
-		},
-		ControlPlane: &omniv1alpha1.OmniControlPlane{
-			ObjectMeta: metav1.ObjectMeta{Name: builderControlPlaneName},
-			Spec: omniv1alpha1.OmniControlPlaneSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: staticClusterName},
-			},
-		},
-		Addons: []AddonInput{
-			{
-				ResourceName: "z-addon",
-				ManifestName: "z-last",
-				Mode:         "one-time",
-				Manifest: []apiextensionsv1.JSON{{
-					Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"z-last"}}`),
-				}},
-			},
-			{
-				ResourceName: testAddonResourceName,
-				ManifestName: testAddonManifestName,
-				Manifest: []apiextensionsv1.JSON{{
-					Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"metrics"}}`),
-				}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("Render() error = %v", err)
-	}
-
-	rendered := string(result.Template)
-	for _, want := range []string{
-		"name: metrics",
-		"mode: full",
-		"kind: Namespace",
-		"name: z-last",
-		"mode: one-time",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("rendered template missing %q:\n%s", want, rendered)
-		}
-	}
-	if got, want := result.AddonRefs, []string{testAddonResourceName, "z-addon"}; strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("AddonRefs = %#v, want %#v", got, want)
-	}
-	if strings.Index(rendered, "name: metrics") > strings.Index(rendered, "name: z-last") {
-		t.Fatalf("addons rendered out of manifest-name order:\n%s", rendered)
-	}
-
-	if err := Validate(result.Template, ""); err != nil {
-		t.Fatalf("Validate() error = %v\n%s", err, rendered)
-	}
-}
-
-func TestRenderIncludesEmptyGenericAddon(t *testing.T) {
-	t.Parallel()
-
-	result, err := Render(Inputs{
-		Cluster: &omniv1alpha1.OmniCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: staticClusterName},
-			Spec: omniv1alpha1.OmniClusterSpec{
-				Kubernetes: omniv1alpha1.KubernetesSpec{Version: testKubernetesVersion},
-				Talos:      omniv1alpha1.TalosSpec{Version: testTalosVersion},
-			},
-		},
-		ControlPlane: &omniv1alpha1.OmniControlPlane{
-			ObjectMeta: metav1.ObjectMeta{Name: builderControlPlaneName},
-			Spec: omniv1alpha1.OmniControlPlaneSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: staticClusterName},
-			},
-		},
-		Addons: []AddonInput{{
-			ResourceName: testAddonResourceName,
-			ManifestName: testAddonManifestName,
-			Manifest:     nil,
-		}},
-	})
-	if err != nil {
-		t.Fatalf("Render() error = %v", err)
-	}
-
-	rendered := string(result.Template)
-	for _, want := range []string{
-		"name: metrics",
-		"mode: full",
-		"inline: []",
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("rendered template missing %q:\n%s", want, rendered)
-		}
-	}
-
-	if err := Validate(result.Template, ""); err != nil {
-		t.Fatalf("Validate() error = %v\n%s", err, rendered)
-	}
-}
-
-func TestRenderRejectsDuplicateAddonManifestName(t *testing.T) {
-	t.Parallel()
-
-	_, err := Render(Inputs{
-		Cluster: &omniv1alpha1.OmniCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: staticClusterName},
-			Spec: omniv1alpha1.OmniClusterSpec{
-				Kubernetes: omniv1alpha1.KubernetesSpec{
-					Version: testKubernetesVersion,
-					Manifests: []omniv1alpha1.KubernetesManifest{{
-						Name: testCiliumManifestName,
-						Mode: testManifestMode,
-						Inline: []apiextensionsv1.JSON{{
-							Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"existing"}}`),
-						}},
-					}},
-				},
-				Talos: omniv1alpha1.TalosSpec{Version: testTalosVersion},
-			},
-		},
-		ControlPlane: &omniv1alpha1.OmniControlPlane{
-			ObjectMeta: metav1.ObjectMeta{Name: builderControlPlaneName},
-			Spec: omniv1alpha1.OmniControlPlaneSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: staticClusterName},
-			},
-		},
-		Addons: []AddonInput{{
-			ResourceName: "edge-addon",
-			ManifestName: testCiliumManifestName,
-			Manifest: []apiextensionsv1.JSON{{
-				Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"kube-system"}}`),
-			}},
-		}},
-	})
-	if err == nil {
-		t.Fatal("Render() error = nil, want duplicate manifest name error")
-	}
-	if !strings.Contains(err.Error(), `duplicate Kubernetes manifest name "cilium"`) {
-		t.Fatalf("Render() error = %v, want duplicate addon manifest name", err)
-	}
-}
-
-func TestRenderRejectsDuplicateAddonAndCiliumManifestName(t *testing.T) {
-	t.Parallel()
-
-	_, err := Render(Inputs{
-		Cluster: &omniv1alpha1.OmniCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: staticClusterName},
-			Spec: omniv1alpha1.OmniClusterSpec{
-				Kubernetes: omniv1alpha1.KubernetesSpec{Version: testKubernetesVersion},
-				Talos:      omniv1alpha1.TalosSpec{Version: testTalosVersion},
-			},
-		},
-		ControlPlane: &omniv1alpha1.OmniControlPlane{
-			ObjectMeta: metav1.ObjectMeta{Name: builderControlPlaneName},
-			Spec: omniv1alpha1.OmniControlPlaneSpec{
-				ClusterRef: omniv1alpha1.OmniClusterRef{Name: staticClusterName},
-			},
-		},
-		Addons: []AddonInput{{
-			ResourceName: "generic-cilium",
-			ManifestName: testCiliumManifestName,
-			Manifest: []apiextensionsv1.JSON{{
-				Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"generic-cilium"}}`),
-			}},
-		}},
-		Cilium: &CiliumInput{
-			ResourceName: "edge-cilium",
-			ManifestName: testCiliumManifestName,
-			Manifest: []apiextensionsv1.JSON{{
-				Raw: []byte(`{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"kube-system"}}`),
-			}},
-		},
-	})
-	if err == nil {
-		t.Fatal("Render() error = nil, want duplicate manifest name error")
-	}
-	if !strings.Contains(err.Error(), `OmniCilium "edge-cilium" conflicts with OmniClusterAddon "generic-cilium"`) {
-		t.Fatalf("Render() error = %v, want addon/cilium duplicate manifest name", err)
 	}
 }
 

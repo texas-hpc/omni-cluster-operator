@@ -16,23 +16,23 @@ entries under the released version heading.
 
 - Added `OmniKubeconfigExport` for explicit, rotating workload-cluster
   service-account kubeconfig Secret exports.
-- Added `OmniClusterAddon` for generic Helm-rendered manifests that are cached
-  in Kubernetes Secrets and injected into `OmniCluster` templates.
 - Added `OmniHelmRelease` for opt-in direct Helm release reconciliation against
   workload clusters using explicit kubeconfig Secrets.
 
 ### Changed
 
-- Updated Cilium samples and docs to use `OmniClusterAddon` plus explicit
-  `OmniCluster.spec.patches`; `OmniCilium` remains available as a legacy
-  compatibility resource.
-
 ### Fixed
 
 ### Removed
+
+- Removed the rendered-addon API resources, controllers, CRDs, RBAC, samples,
+  chart content, and docs. Use `OmniCluster.spec.kubernetes.manifests` for raw
+  Omni manifest sync or `OmniHelmRelease` for workload-cluster Helm lifecycle.
 
 ### Breaking Changes
 
 - Renamed the Kubernetes API group from `omni.texas-hpc.org/v1alpha1` to
   `omni.texashpc.com/v1alpha1`. Existing GitOps manifests and installed CRDs
   must be migrated to the new API group.
+- The rendered-addon API resources are no longer served. Existing manifests for
+  those APIs must be removed or migrated before upgrading.

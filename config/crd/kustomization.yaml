@@ -3,8 +3,6 @@
 # It should be run by config/default
 resources:
 - bases/omni.texashpc.com_omniconnections.yaml
-- bases/omni.texashpc.com_omniciliums.yaml
-- bases/omni.texashpc.com_omniclusteraddons.yaml
 - bases/omni.texashpc.com_omniclusters.yaml
 - bases/omni.texashpc.com_omnicontrolplanes.yaml
 - bases/omni.texashpc.com_omnimachines.yaml
