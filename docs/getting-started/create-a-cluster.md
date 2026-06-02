@@ -7,7 +7,7 @@ Use these resources to manage the full Omni cluster template lifecycle from Kube
 - Pause remote sync while preparing a larger change.
 - Delete the remote Omni cluster or orphan it intentionally.
 
-Create one `OmniConnection`, one `OmniCluster`, and exactly one `OmniControlPlane` for each cluster. Add `OmniWorkers` and `OmniMachine` only when the cluster needs them. Add `OmniKubeconfigExport` and `OmniHelmRelease` only after you have an explicit workload-cluster kubeconfig Secret for direct Helm reconciliation.
+Create one `OmniConnection`, one `OmniCluster`, and exactly one `OmniControlPlane` for each cluster. Add `OmniWorkers` and `OmniMachine` only when the cluster needs them. Add `OmniKubeconfigExport` to create and export a workload-cluster kubeconfig Secret. Add `OmniHelmRelease` only after the exported kubeconfig Secret is available for direct Helm reconciliation.
 
 If you do not create any workers, configure Talos to allow workloads on the control plane nodes.
 
@@ -156,10 +156,10 @@ spec:
     manifests:
       - name: platform-namespace
         inline:
-          apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: platform
+          - apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: platform
   talos:
     version: v1.13.2
 ```
