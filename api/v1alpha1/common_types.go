@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	// Finalizer is attached to resources that own remote Omni lifecycle.
+	// Finalizer is attached to resources that own remote Omni lifecycle or generated artifacts.
 	Finalizer = "omni.texashpc.com/finalizer"
 	// LegacyFinalizer is the old finalizer value from before the API group rename.
 	LegacyFinalizer = "omni.texas-hpc.org/finalizer"
@@ -42,12 +42,16 @@ const (
 	ConditionValidated = "Validated"
 	// ConditionSynced reports whether the desired template is synced to Omni.
 	ConditionSynced = "Synced"
+	// ConditionExported reports whether a requested generated artifact was written to its target Secret.
+	ConditionExported = "Exported"
 
 	ReasonAccepted          = "Accepted"
 	ReasonConnectionReady   = "ConnectionReady"
 	ReasonConnectionFailed  = "ConnectionFailed"
 	ReasonDeleteFailed      = "DeleteFailed"
 	ReasonDeleting          = "Deleting"
+	ReasonExported          = "Exported"
+	ReasonExportFailed      = "ExportFailed"
 	ReasonMissingCluster    = "MissingCluster"
 	ReasonMissingConnection = "MissingConnection"
 	ReasonMissingSecret     = "MissingSecret"

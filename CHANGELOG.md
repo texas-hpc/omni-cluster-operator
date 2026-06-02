@@ -14,6 +14,8 @@ entries under the released version heading.
 
 ### Added
 
+- Added `OmniKubeconfigExport` for explicit, rotating workload-cluster
+  service-account kubeconfig Secret exports.
 - Added `OmniClusterAddon` for generic Helm-rendered manifests that are cached
   in Kubernetes Secrets and injected into `OmniCluster` templates.
 

@@ -38,6 +38,8 @@ The chart installs CRDs in the `omni.texashpc.com` API group:
 | `OmniControlPlane` | Defines control plane machine group configuration for an Omni cluster. |
 | `OmniMachine` | Selects or configures machines used by cluster machine groups. |
 | `OmniWorkers` | Defines worker machine group configuration for an Omni cluster. |
+| `OmniClusterAddon` | Defines Helm-rendered manifest entries for an Omni cluster. |
+| `OmniKubeconfigExport` | Exports a scoped workload-cluster kubeconfig Secret on request. |
 | `OmniCilium` | Renders and syncs Cilium resources for an Omni cluster. |
 
 ## Values
@@ -55,6 +57,7 @@ changing installed API versions in production.
 ## Documentation
 
 - [Project documentation](https://texas-hpc.github.io/omni-cluster-operator/)
+- [Workload access](https://texas-hpc.github.io/omni-cluster-operator/getting-started/workload-access/)
 - [API reference](https://texas-hpc.github.io/omni-cluster-operator/reference/api/)
 - [Source repository](https://github.com/texas-hpc/omni-cluster-operator)
 

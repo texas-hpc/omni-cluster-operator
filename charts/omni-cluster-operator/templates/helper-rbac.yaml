@@ -5,6 +5,7 @@
   (dict "resource" "omniclusters" "name" "omnicluster")
   (dict "resource" "omniconnections" "name" "omniconnection")
   (dict "resource" "omnicontrolplanes" "name" "omnicontrolplane")
+  (dict "resource" "omnikubeconfigexports" "name" "omnikubeconfigexport")
   (dict "resource" "omnimachines" "name" "omnimachine")
   (dict "resource" "omniworkers" "name" "omniworkers")
 }}

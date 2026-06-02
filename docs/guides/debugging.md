@@ -5,7 +5,7 @@ Start with Kubernetes status, then inspect operator logs, then compare with Omni
 ## Check resources
 
 ```sh
-kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniciliums \
+kubectl get omniconnections,omniclusters,omnicontrolplanes,omniworkers,omnimachines,omniclusteraddons,omnikubeconfigexports,omniciliums \
   --namespace omni-cluster-operator-system
 ```
 
@@ -16,6 +16,9 @@ kubectl describe omniconnection omni \
   --namespace omni-cluster-operator-system
 
 kubectl describe omnicluster edge \
+  --namespace omni-cluster-operator-system
+
+kubectl describe omnikubeconfigexport cluster-01-automation-kubeconfig \
   --namespace omni-cluster-operator-system
 
 kubectl describe omnicilium edge-cilium \
@@ -38,6 +41,7 @@ kubectl logs deployment/omni-cluster-operator-controller-manager \
 | `Accepted` | A child document references an existing `OmniCluster`. |
 | `Validated` | The assembled Omni template passed upstream Omni validation. |
 | `Synced` | The desired template was synced to Omni. |
+| `Exported` | A requested workload-cluster kubeconfig Secret was written. |
 | `Ready` | The resource is ready for normal use. |
 
 | Reason | Likely cause |
@@ -48,6 +52,7 @@ kubectl logs deployment/omni-cluster-operator-controller-manager \
 | `MissingCluster` | A child resource points at a missing `OmniCluster`. |
 | `ValidationFailed` | The rendered Omni cluster template is not accepted by Omni validation. |
 | `SyncFailed` | Omni rejected or failed the create/update operation. |
+| `ExportFailed` | Omni could not issue a kubeconfig, or the returned kubeconfig could not be parsed. |
 | `Suspended` | `OmniCluster.spec.suspend` is true. |
 | `Deleting` | The resource is waiting for remote cleanup before finalizer removal. |
 | `DeleteFailed` | Omni deletion failed. |
@@ -63,6 +68,34 @@ The chart installs validating webhooks. If `kubectl apply` fails before an objec
 - Ambiguous inline and file-backed patch or manifest sources.
 - Invalid addon Helm repository, chart, version, or values shape.
 - Duplicate manifest names between `OmniCluster.spec.kubernetes.manifests[]`, `OmniClusterAddon.spec.manifestName`, and legacy `OmniCilium.spec.manifestName`.
+- Invalid `OmniKubeconfigExport` fields, such as blank service-account groups, `renewBefore` greater than or equal to `ttl`, or `system:masters` without `serviceAccount.allowClusterAdmin: true`.
+
+## Kubeconfig export issues
+
+`OmniKubeconfigExport` creates and rotates a target Secret only after the parent cluster and connection are available.
+
+Check the export status:
+
+```sh
+kubectl get omnikubeconfigexport cluster-01-automation-kubeconfig \
+  --namespace omni-cluster-operator-system \
+  --output yaml
+```
+
+Check the target Secret metadata and key:
+
+```sh
+kubectl get secret cluster-01-automation-kubeconfig \
+  --namespace omni-cluster-operator-system \
+  --output jsonpath='{.metadata.annotations}{"\n"}{.data.kubeconfig}' | head
+```
+
+Common causes:
+
+- `MissingCluster`: `spec.clusterRef.name` does not match an `OmniCluster` in the same namespace.
+- `MissingConnection`: the referenced cluster points at an unavailable `OmniConnection`.
+- `ExportFailed`: Omni rejected the service-account kubeconfig request, credentials are invalid, or Omni returned data that is not a kubeconfig.
+- Secret consumers are reading the wrong key. The default key is `kubeconfig`; custom keys come from `spec.targetSecretRef.key`.
 
 ## Addon render issues
 

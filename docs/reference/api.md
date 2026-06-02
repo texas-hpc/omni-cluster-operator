@@ -103,6 +103,28 @@ Defines a generic Helm-rendered manifest for one `OmniCluster`.
 
 Status includes rendered manifest Secret name, rendered manifest hash, manifest name, chart, chart version, and last render time.
 
+## OmniKubeconfigExport
+
+Exports a scoped workload-cluster service-account kubeconfig into a Secret only when explicitly requested.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `spec.clusterRef.name` | Yes | `OmniCluster` in the same namespace. |
+| `spec.targetSecretRef.name` | Yes | Target Secret in the same namespace. |
+| `spec.targetSecretRef.key` | No | Secret data key. Defaults to `kubeconfig`. |
+| `spec.serviceAccount.user` | Yes | Kubernetes username for the generated kubeconfig. |
+| `spec.serviceAccount.groups` | Yes | Kubernetes groups for the generated kubeconfig. `system:masters` requires `allowClusterAdmin: true`. |
+| `spec.serviceAccount.allowClusterAdmin` | No | Allows `system:masters`. Leave false for scoped automation credentials. |
+| `spec.ttl` | Yes | Requested service-account kubeconfig lifetime, such as `24h`. |
+| `spec.renewBefore` | No | Rotate before expiration, such as `4h`. Must be less than `ttl`. |
+| `spec.deletionPolicy` | Yes | `Delete` removes the target Secret on deletion; `Orphan` leaves it behind. |
+
+Status includes `Ready`, `Accepted`, `Exported`, target Secret name/key, kubeconfig hash, expiration time, next rotation time, and last rotation time.
+
+The target Secret is created in the same namespace as the export. The default data key is `kubeconfig`. Secret labels and annotations include the owning export UID/name, remote cluster name, generated kubeconfig hash, export spec hash, expiration time, and last rotation time.
+
+Changing the service-account user, groups, TTL, target key, or remote cluster name changes the export spec hash and causes a new kubeconfig request. `renewBefore`, target Secret name, and deletion policy affect rotation or cleanup behavior but do not change the generated kubeconfig identity.
+
 ## OmniCilium
 
 Deprecated. Defines a legacy Cilium install for one `OmniCluster`. New Cilium manifests should prefer `OmniClusterAddon` plus explicit Talos patches on `OmniCluster`.
