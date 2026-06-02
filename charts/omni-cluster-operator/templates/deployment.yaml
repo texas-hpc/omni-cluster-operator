@@ -63,6 +63,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: HELM_CACHE_HOME
+              value: /tmp/omni-cluster-operator/helm/cache
+            - name: HELM_CONFIG_HOME
+              value: /tmp/omni-cluster-operator/helm/config
+            - name: HELM_DATA_HOME
+              value: /tmp/omni-cluster-operator/helm/data
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -83,6 +89,8 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            - mountPath: /tmp/omni-cluster-operator
+              name: helm-cache
             {{- if .Values.webhook.enabled }}
             - mountPath: {{ .Values.webhook.certDir }}
               name: webhook-certs
@@ -92,6 +100,8 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
+        - name: helm-cache
+          emptyDir: {}
         {{- if .Values.webhook.enabled }}
         - name: webhook-certs
           secret:
