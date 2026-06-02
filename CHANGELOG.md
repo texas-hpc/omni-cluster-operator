@@ -21,6 +21,9 @@ entries under the released version heading.
 
 ### Changed
 
+- Set the published release baseline to `1.0.0` for the stable operator
+  release line.
+
 ### Fixed
 
 ### Removed
