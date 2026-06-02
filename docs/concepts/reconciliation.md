@@ -12,6 +12,8 @@ On each `OmniCluster` reconcile, the operator:
 8. Reads Omni cluster status and updates Kubernetes conditions.
 9. On deletion, calls Omni template deletion unless `spec.deletePolicy.orphan` is true.
 
+On each `OmniConnection` reconcile, the operator adds `omni.texashpc.com/finalizer`. On deletion, the finalizer is kept while any `OmniCluster` in the same namespace still references the connection through `spec.connectionRef.name`.
+
 ## Upstream Omni boundary
 
 The operator intentionally does not reimplement Omni's cluster-template behavior. It renders YAML and delegates drift-prone behavior to `github.com/siderolabs/omni/client/pkg/template/operations`:

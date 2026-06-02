@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,6 +30,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
@@ -45,6 +49,7 @@ type OmniConnectionReconciler struct {
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniconnections,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniconnections/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniconnections/finalizers,verbs=update
+// +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
 func (r *OmniConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -57,6 +62,19 @@ func (r *OmniConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		return ctrl.Result{}, err
+	}
+
+	if !connection.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, connection)
+	}
+
+	if !controllerutil.ContainsFinalizer(connection, omniv1alpha1.Finalizer) && !controllerutil.ContainsFinalizer(connection, omniv1alpha1.LegacyFinalizer) {
+		controllerutil.AddFinalizer(connection, omniv1alpha1.Finalizer)
+		if err := r.Update(ctx, connection); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	now := metav1.Now()
@@ -87,6 +105,69 @@ func (r *OmniConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+}
+
+func (r *OmniConnectionReconciler) reconcileDelete(ctx context.Context, connection *omniv1alpha1.OmniConnection) (ctrl.Result, error) {
+	if !controllerutil.ContainsFinalizer(connection, omniv1alpha1.Finalizer) && !controllerutil.ContainsFinalizer(connection, omniv1alpha1.LegacyFinalizer) {
+		return ctrl.Result{}, nil
+	}
+
+	references, err := r.referencingClusterNames(ctx, connection)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if len(references) > 0 {
+		message := fmt.Sprintf("waiting for OmniCluster references to be deleted: %s", strings.Join(references, ", "))
+		statusErr := r.updateConnectionStatus(ctx, connection, func(status *omniv1alpha1.OmniConnectionStatus) {
+			status.ObservedGeneration = connection.Generation
+			status.ConnectionRef = connection.Name
+			status.Endpoint = connection.Spec.Endpoint
+			omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionFalse, connection.Generation, omniv1alpha1.ReasonDeleting, message))
+			omniv1alpha1.SetCondition(&status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionStalled, metav1.ConditionTrue, connection.Generation, omniv1alpha1.ReasonDeleting, message))
+		})
+
+		return ctrl.Result{RequeueAfter: time.Minute}, statusErr
+	}
+
+	return ctrl.Result{}, r.removeFinalizers(ctx, connection)
+}
+
+func (r *OmniConnectionReconciler) referencingClusterNames(ctx context.Context, connection *omniv1alpha1.OmniConnection) ([]string, error) {
+	clusterList := &omniv1alpha1.OmniClusterList{}
+	if err := r.List(ctx, clusterList, client.InNamespace(connection.Namespace)); err != nil {
+		return nil, err
+	}
+
+	var references []string
+	for _, cluster := range clusterList.Items {
+		if cluster.Spec.ConnectionRef.Name == connection.Name {
+			references = append(references, cluster.Name)
+		}
+	}
+
+	sort.Strings(references)
+
+	return references, nil
+}
+
+func (r *OmniConnectionReconciler) removeFinalizers(ctx context.Context, connection *omniv1alpha1.OmniConnection) error {
+	key := client.ObjectKeyFromObject(connection)
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &omniv1alpha1.OmniConnection{}
+		if err := r.Get(ctx, key, latest); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+
+			return err
+		}
+
+		controllerutil.RemoveFinalizer(latest, omniv1alpha1.Finalizer)
+		controllerutil.RemoveFinalizer(latest, omniv1alpha1.LegacyFinalizer)
+
+		return r.Update(ctx, latest)
+	})
 }
 
 func (r *OmniConnectionReconciler) omniClient() omniapi.Client {
@@ -121,6 +202,21 @@ func (r *OmniConnectionReconciler) updateConnectionStatus(ctx context.Context, c
 func (r *OmniConnectionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&omniv1alpha1.OmniConnection{}, builder.WithPredicates(specOrDeletionChangedPredicate())).
+		Watches(&omniv1alpha1.OmniCluster{}, handler.EnqueueRequestsFromMapFunc(requestForClusterConnection), builder.WithPredicates(specOrDeletionChangedPredicate())).
 		Named("omniconnection").
 		Complete(r)
+}
+
+func requestForClusterConnection(_ context.Context, object client.Object) []ctrl.Request {
+	cluster, ok := object.(*omniv1alpha1.OmniCluster)
+	if !ok {
+		return nil
+	}
+	if cluster.Spec.ConnectionRef.Name == "" {
+		return nil
+	}
+
+	return []ctrl.Request{{
+		NamespacedName: client.ObjectKey{Namespace: cluster.Namespace, Name: cluster.Spec.ConnectionRef.Name},
+	}}
 }
