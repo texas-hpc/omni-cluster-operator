@@ -20,12 +20,10 @@ import (
 	"context"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 )
@@ -33,7 +31,6 @@ import (
 // OmniControlPlaneReconciler reconciles a OmniControlPlane object
 type OmniControlPlaneReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnicontrolplanes,verbs=get;list;watch;create;update;patch;delete
@@ -42,8 +39,6 @@ type OmniControlPlaneReconciler struct {
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters,verbs=get;list;watch
 
 func (r *OmniControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
-
 	controlPlane := &omniv1alpha1.OmniControlPlane{}
 	if err := r.Get(ctx, req.NamespacedName, controlPlane); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -53,7 +48,7 @@ func (r *OmniControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, err
 	}
 
-	exists, err := (childStatusClient{Client: r.Client, Scheme: r.Scheme}).clusterExists(ctx, controlPlane.Namespace, controlPlane.Spec.ClusterRef.Name)
+	exists, err := (childStatusClient{Client: r.Client}).clusterExists(ctx, controlPlane.Namespace, controlPlane.Spec.ClusterRef.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

@@ -25,14 +25,12 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
@@ -41,7 +39,6 @@ import (
 // OmniConnectionReconciler reconciles a OmniConnection object
 type OmniConnectionReconciler struct {
 	client.Client
-	Scheme       *runtime.Scheme
 	SecretReader client.Reader
 	Omni         omniapi.Client
 }
@@ -53,8 +50,6 @@ type OmniConnectionReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 
 func (r *OmniConnectionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
-
 	connection := &omniv1alpha1.OmniConnection{}
 	if err := r.Get(ctx, req.NamespacedName, connection); err != nil {
 		if apierrors.IsNotFound(err) {

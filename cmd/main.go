@@ -199,7 +199,6 @@ func main() {
 
 	if err := (&controller.OmniClusterReconciler{
 		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
 		SecretReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnicluster")
@@ -207,7 +206,6 @@ func main() {
 	}
 	if err := (&controller.OmniConnectionReconciler{
 		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
 		SecretReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omniconnection")
@@ -215,28 +213,24 @@ func main() {
 	}
 	if err := (&controller.OmniControlPlaneReconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnicontrolplane")
 		os.Exit(1)
 	}
 	if err := (&controller.OmniWorkersReconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omniworkers")
 		os.Exit(1)
 	}
 	if err := (&controller.OmniMachineReconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnimachine")
 		os.Exit(1)
 	}
 	if err := (&controller.OmniKubeconfigExportReconciler{
 		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
 		SecretReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnikubeconfigexport")
@@ -244,7 +238,6 @@ func main() {
 	}
 	if err := (&controller.OmniHelmReleaseReconciler{
 		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
 		SecretReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnihelmrelease")

@@ -24,7 +24,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -42,7 +41,6 @@ import (
 // OmniClusterReconciler reconciles a OmniCluster object
 type OmniClusterReconciler struct {
 	client.Client
-	Scheme       *runtime.Scheme
 	SecretReader client.Reader
 	Omni         omniapi.Client
 }

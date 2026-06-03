@@ -26,17 +26,16 @@ import (
 )
 
 const (
-	DefaultNamespace       = "default"
-	DefaultKubeconfigKey   = "kubeconfig"
-	DefaultTimeout         = 5 * time.Minute
-	DefaultDeletionPolicy  = omniv1alpha1.HelmReleaseDeletionPolicyUninstall
-	ActionInstall          = "Install"
-	ActionUpgrade          = "Upgrade"
-	ActionUninstall        = "Uninstall"
-	StatusDeployed         = "deployed"
-	StatusUninstalled      = "uninstalled"
-	StatusUnknown          = "unknown"
-	releaseSpecHashVersion = "v1"
+	DefaultNamespace      = "default"
+	DefaultKubeconfigKey  = "kubeconfig"
+	DefaultTimeout        = 5 * time.Minute
+	DefaultDeletionPolicy = omniv1alpha1.HelmReleaseDeletionPolicyUninstall
+	ActionInstall         = "Install"
+	ActionUpgrade         = "Upgrade"
+	ActionUninstall       = "Uninstall"
+	StatusDeployed        = "deployed"
+	StatusUninstalled     = "uninstalled"
+	StatusUnknown         = "unknown"
 )
 
 // Result describes the release state returned by Helm.
@@ -113,59 +112,4 @@ func Values(item *omniv1alpha1.OmniHelmRelease) (map[string]any, error) {
 	}
 
 	return object, nil
-}
-
-// SpecHash returns a stable hash of release inputs that affect Helm reconciliation.
-func SpecHash(item *omniv1alpha1.OmniHelmRelease) (string, error) {
-	values, err := Values(item)
-	if err != nil {
-		return "", err
-	}
-
-	normalized := struct {
-		Version             string                                 `json:"version"`
-		Repository          string                                 `json:"repository"`
-		Chart               string                                 `json:"chart"`
-		ChartVersion        string                                 `json:"chartVersion"`
-		ReleaseName         string                                 `json:"releaseName"`
-		Namespace           string                                 `json:"namespace"`
-		KubeconfigSecretRef string                                 `json:"kubeconfigSecretRef"`
-		KubeconfigSecretKey string                                 `json:"kubeconfigSecretKey"`
-		CreateNamespace     bool                                   `json:"createNamespace"`
-		Wait                bool                                   `json:"wait"`
-		WaitForJobs         bool                                   `json:"waitForJobs"`
-		Timeout             string                                 `json:"timeout"`
-		Atomic              bool                                   `json:"atomic"`
-		DisableHooks        bool                                   `json:"disableHooks"`
-		SkipCRDs            bool                                   `json:"skipCRDs"`
-		MaxHistory          int                                    `json:"maxHistory"`
-		DeletionPolicy      omniv1alpha1.HelmReleaseDeletionPolicy `json:"deletionPolicy"`
-		Values              map[string]any                         `json:"values"`
-	}{
-		Version:             releaseSpecHashVersion,
-		Repository:          item.Spec.Chart.Repository,
-		Chart:               item.Spec.Chart.Chart,
-		ChartVersion:        item.Spec.Chart.Version,
-		ReleaseName:         ReleaseName(item),
-		Namespace:           Namespace(item),
-		KubeconfigSecretRef: item.Spec.KubeconfigSecretRef.Name,
-		KubeconfigSecretKey: KubeconfigSecretKey(item),
-		CreateNamespace:     item.Spec.CreateNamespace,
-		Wait:                item.Spec.Wait,
-		WaitForJobs:         item.Spec.WaitForJobs,
-		Timeout:             Timeout(item).String(),
-		Atomic:              item.Spec.Atomic,
-		DisableHooks:        item.Spec.DisableHooks,
-		SkipCRDs:            item.Spec.SkipCRDs,
-		MaxHistory:          item.Spec.MaxHistory,
-		DeletionPolicy:      DeletionPolicy(item),
-		Values:              values,
-	}
-
-	payload, err := json.Marshal(normalized)
-	if err != nil {
-		return "", fmt.Errorf("marshal Helm release spec hash payload: %w", err)
-	}
-
-	return Hash(payload), nil
 }

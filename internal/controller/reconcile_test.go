@@ -170,7 +170,7 @@ func TestOmniClusterDoesNotDestroyMachinesDuringNormalSync(t *testing.T) {
 		WithObjects(testConnection(), cluster, testControlPlane(), testWorkers()).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -201,7 +201,7 @@ func TestOmniClusterReconcilesTemplateToOmni(t *testing.T) {
 		WithObjects(testConnection(), testCluster(), testControlPlane(), testWorkers()).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -247,7 +247,7 @@ func TestOmniClusterMissingControlPlaneDoesNotSync(t *testing.T) {
 		WithObjects(testConnection(), testCluster()).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -287,7 +287,7 @@ func TestOmniClusterDeleteCallsOmniFinalizer(t *testing.T) {
 		WithObjects(testConnection(), cluster).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -316,7 +316,7 @@ func TestOmniClusterDeletePassesDestroyMachines(t *testing.T) {
 		WithObjects(testConnection(), cluster).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -347,7 +347,7 @@ func TestOmniClusterDeleteRemovesLegacyFinalizer(t *testing.T) {
 		WithObjects(testConnection(), cluster).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -392,7 +392,7 @@ func TestOmniClusterDeleteRemovesBothFinalizers(t *testing.T) {
 		WithObjects(testConnection(), cluster).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -434,7 +434,7 @@ func TestOmniClusterDoesNotAddFinalizerWhenLegacyFinalizerPresent(t *testing.T) 
 		WithObjects(testConnection(), cluster, testControlPlane(), testWorkers()).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	// First reconcile should not add new finalizer since legacy is present
@@ -472,7 +472,7 @@ func TestOmniClusterAddsNewFinalizerWhenNoFinalizerPresent(t *testing.T) {
 		WithObjects(testConnection(), cluster, testControlPlane(), testWorkers()).
 		Build()
 
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniClusterReconciler{Client: k8sClient, Omni: omni}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testClusterName}}
 
 	// First reconcile should add the new finalizer
@@ -516,7 +516,7 @@ func TestChildControllerMarksMissingCluster(t *testing.T) {
 		WithObjects(machine).
 		Build()
 
-	reconciler := &OmniMachineReconciler{Client: k8sClient, Scheme: scheme}
+	reconciler := &OmniMachineReconciler{Client: k8sClient}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: testMachineName}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -550,7 +550,7 @@ func TestChildControllersMarkClusterAccepted(t *testing.T) {
 					WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniControlPlane{}).
 					WithObjects(testCluster(), object).
 					Build()
-				reconciler := &OmniControlPlaneReconciler{Client: k8sClient, Scheme: scheme}
+				reconciler := &OmniControlPlaneReconciler{Client: k8sClient}
 				return k8sClient, reconciler.Reconcile
 			},
 			assert: func(t *testing.T, ctx context.Context, k8sClient clientReader) {
@@ -568,7 +568,7 @@ func TestChildControllersMarkClusterAccepted(t *testing.T) {
 					WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniWorkers{}).
 					WithObjects(testCluster(), object).
 					Build()
-				reconciler := &OmniWorkersReconciler{Client: k8sClient, Scheme: scheme}
+				reconciler := &OmniWorkersReconciler{Client: k8sClient}
 				return k8sClient, reconciler.Reconcile
 			},
 			assert: func(t *testing.T, ctx context.Context, k8sClient clientReader) {
@@ -591,7 +591,7 @@ func TestChildControllersMarkClusterAccepted(t *testing.T) {
 					WithStatusSubresource(&omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniMachine{}).
 					WithObjects(testCluster(), object).
 					Build()
-				reconciler := &OmniMachineReconciler{Client: k8sClient, Scheme: scheme}
+				reconciler := &OmniMachineReconciler{Client: k8sClient}
 				return k8sClient, reconciler.Reconcile
 			},
 			assert: func(t *testing.T, ctx context.Context, k8sClient clientReader) {
@@ -668,7 +668,7 @@ func TestOmniConnectionReconcilesReachability(t *testing.T) {
 				Build()
 
 			omni := &fakeOmni{pingErr: tt.pingErr}
-			reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+			reconciler := &OmniConnectionReconciler{Client: k8sClient, Omni: omni}
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}})
 			if tt.wantError && err == nil {
 				t.Fatal("Reconcile() error = nil, want error")
@@ -721,7 +721,7 @@ func TestOmniConnectionAddsFinalizer(t *testing.T) {
 		WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
 		WithObjects(connection).
 		Build()
-	reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniConnectionReconciler{Client: k8sClient, Omni: omni}
 
 	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}})
 	if err != nil {
@@ -762,7 +762,7 @@ func TestOmniConnectionDeleteWaitsForReferencingClusters(t *testing.T) {
 		WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
 		WithObjects(connection, cluster, otherCluster).
 		Build()
-	reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniConnectionReconciler{Client: k8sClient, Omni: omni}
 
 	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}})
 	if err != nil {
@@ -807,7 +807,7 @@ func TestOmniConnectionDeleteRemovesFinalizersWhenUnreferenced(t *testing.T) {
 		WithStatusSubresource(&omniv1alpha1.OmniConnection{}).
 		WithObjects(connection).
 		Build()
-	reconciler := &OmniConnectionReconciler{Client: k8sClient, Scheme: scheme, Omni: omni}
+	reconciler := &OmniConnectionReconciler{Client: k8sClient, Omni: omni}
 
 	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: connection.Name}}); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -842,7 +842,7 @@ func TestOmniHelmReleaseInstallsDirectRelease(t *testing.T) {
 		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
 		WithObjects(testCluster(), item, secret).
 		Build()
-	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Helm: helm}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
 
 	if _, err := reconciler.Reconcile(ctx, request); err != nil {
@@ -912,7 +912,7 @@ func TestOmniHelmReleaseReportsUpgradeStatus(t *testing.T) {
 		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
 		WithObjects(testCluster(), item, secret).
 		Build()
-	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Helm: helm}
 
 	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -971,7 +971,7 @@ func TestOmniHelmReleaseReportsHelmFailure(t *testing.T) {
 				WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
 				WithObjects(testCluster(), item, secret).
 				Build()
-			reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+			reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Helm: helm}
 
 			if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err == nil || !strings.Contains(err.Error(), "helm action failed") {
 				t.Fatalf("Reconcile() error = %v, want helm action failed", err)
@@ -1038,7 +1038,7 @@ func TestOmniHelmReleaseWaitsForClusterAndCredentials(t *testing.T) {
 				WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
 				WithObjects(objects...).
 				Build()
-			reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+			reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Helm: helm}
 
 			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
 			if err != nil {
@@ -1078,7 +1078,7 @@ func TestOmniHelmReleaseDeleteUninstallsRelease(t *testing.T) {
 		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
 		WithObjects(testCluster(), item, secret).
 		Build()
-	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Helm: helm}
 
 	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -1116,7 +1116,7 @@ func TestOmniHelmReleaseDeleteCanOrphanRelease(t *testing.T) {
 		WithStatusSubresource(&omniv1alpha1.OmniHelmRelease{}).
 		WithObjects(testCluster(), item).
 		Build()
-	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Scheme: scheme, Helm: helm}
+	reconciler := &OmniHelmReleaseReconciler{Client: k8sClient, Helm: helm}
 
 	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -1153,7 +1153,6 @@ func TestOmniKubeconfigExportWritesServiceAccountSecret(t *testing.T) {
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
 		Client: k8sClient,
-		Scheme: scheme,
 		Omni:   omni,
 		Clock:  func() time.Time { return now },
 	}
@@ -1230,7 +1229,6 @@ func TestOmniKubeconfigExportReusesCurrentSecretUntilRenewBefore(t *testing.T) {
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
 		Client: k8sClient,
-		Scheme: scheme,
 		Omni:   omni,
 		Clock:  func() time.Time { return now },
 	}
@@ -1275,7 +1273,6 @@ func TestOmniKubeconfigExportRotatesWhenRenewBeforeElapsed(t *testing.T) {
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
 		Client: k8sClient,
-		Scheme: scheme,
 		Omni:   omni,
 		Clock:  func() time.Time { return now },
 	}
@@ -1327,7 +1324,7 @@ func TestOmniKubeconfigExportDeletionPolicy(t *testing.T) {
 				WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}).
 				WithObjects(item, secret).
 				Build()
-			reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient, Scheme: scheme}
+			reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient}
 
 			if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
@@ -1380,7 +1377,6 @@ func TestOmniKubeconfigExportReportsMissingDependencies(t *testing.T) {
 				Build()
 			reconciler := &OmniKubeconfigExportReconciler{
 				Client: k8sClient,
-				Scheme: scheme,
 				Omni:   omni,
 			}
 
@@ -1446,7 +1442,6 @@ func TestOmniKubeconfigExportReportsExportFailures(t *testing.T) {
 				Build()
 			reconciler := &OmniKubeconfigExportReconciler{
 				Client: k8sClient,
-				Scheme: scheme,
 				Omni:   tt.omni,
 			}
 
@@ -1510,7 +1505,6 @@ func TestOmniKubeconfigExportCleansPreviousOwnedTargetSecret(t *testing.T) {
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
 		Client: k8sClient,
-		Scheme: scheme,
 		Omni:   &fakeOmni{kubeconfigData: testKubeconfigBytes("new-token")},
 		Clock:  func() time.Time { return now },
 	}
@@ -1565,7 +1559,6 @@ func TestOmniKubeconfigExportRemovesPreviousKeyInOwnedSecret(t *testing.T) {
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
 		Client: k8sClient,
-		Scheme: scheme,
 		Omni:   &fakeOmni{kubeconfigData: testKubeconfigBytes("new-token")},
 		Clock:  func() time.Time { return now },
 	}
@@ -1668,7 +1661,7 @@ func TestClusterWatchRequestMapping(t *testing.T) {
 			},
 		).
 		Build()
-	reconciler := &OmniClusterReconciler{Client: k8sClient, Scheme: scheme}
+	reconciler := &OmniClusterReconciler{Client: k8sClient}
 
 	for _, child := range []client.Object{testControlPlane(), testWorkers(), testMachine()} {
 		requests := requestForChildCluster(ctx, child)
@@ -1720,7 +1713,7 @@ func TestKubeconfigExportWatchRequestMapping(t *testing.T) {
 		WithScheme(scheme).
 		WithObjects(testCluster(), otherCluster, item, other).
 		Build()
-	reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient, Scheme: scheme}
+	reconciler := &OmniKubeconfigExportReconciler{Client: k8sClient}
 
 	clusterRequests := kubeconfigExportRequestsForCluster(ctx, k8sClient, testCluster())
 	if len(clusterRequests) != 1 || clusterRequests[0].Name != item.Name {
