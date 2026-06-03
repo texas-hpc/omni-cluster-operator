@@ -44,6 +44,25 @@ The default deployment includes validating webhooks and cert-manager
 `Certificate` resources, so cert-manager must be installed before deploying the
 operator, running Skaffold, or running e2e tests.
 
+## Commit Messages
+
+Commit messages must follow
+[Conventional Commits](https://www.conventionalcommits.org/) and are checked in
+CI with Commitlint. The usual forms are `feat: add capability`,
+`fix(controller): handle missing secret`, `docs: update install guide`, and
+`chore(deps): update tooling`.
+
+Commitlint's conventional preset requires commit subjects in this shape:
+
+```text
+type(optional-scope): short description
+```
+
+Allowed types are `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
+`refactor`, `revert`, `style`, and `test`. Types must be lowercase, the subject
+must not end with a period, and the full first line must be 100 characters or
+less.
+
 ## Project Boundaries
 
 - Keep `github.com/siderolabs/omni/client` as the Omni integration boundary.
