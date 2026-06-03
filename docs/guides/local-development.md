@@ -17,12 +17,17 @@ There is intentionally no Makefile. Use `task <task>`; task definitions live in
 ```sh
 task kind-up
 task cert-manager-up
-task tilt
+task dev
 ```
 
-Tilt builds `controller:latest`, applies the default Kustomize deployment, and exposes the health endpoint on port `8081`.
+Skaffold builds the manager image, renders `config/default` with Kustomize,
+deploys it with `kubectl`, tails controller logs, and exposes the health
+endpoint on port `8081`.
 
 `task cert-manager-up` is only for the local development cluster created by this repository. Do not use it as end-user installation guidance for production clusters.
+
+Set `KIND_NODE_IMAGE` before `task kind-up` to create the local cluster with a
+different kind node image.
 
 ## Render samples
 

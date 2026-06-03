@@ -194,6 +194,18 @@ tasks:
         image="${IMG:-${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}}"
         "${CONTAINER_TOOL:-docker}" push "${image}"
 
+  dev:
+    desc: Run the operator in the local Kubernetes cluster with Skaffold.
+    cmds:
+      - task: manifests
+      - skaffold dev
+
+  dev-deploy:
+    desc: Build and deploy the operator once with Skaffold.
+    cmds:
+      - task: manifests
+      - skaffold run
+
   docs-build:
     desc: Build the MkDocs site.
     cmds:
@@ -247,14 +259,25 @@ tasks:
         printf '%s\n' "${out}" | kubectl apply -f -
 
   kind-down:
-    desc: Delete the local kind cluster through ctlptl.
+    desc: Delete the local kind cluster.
     cmds:
-      - ctlptl delete -f hack/kind/cluster.yaml
+      - kind delete cluster --name "${KIND_CLUSTER:-omni-cluster-operator-dev}"
 
   kind-up:
-    desc: Create the local kind cluster through ctlptl.
+    desc: Create the local kind cluster.
     cmds:
-      - ctlptl apply -f hack/kind/cluster.yaml
+      - |
+        cluster="${KIND_CLUSTER:-omni-cluster-operator-dev}"
+        image="${KIND_NODE_IMAGE:-kindest/node:v1.35.0}"
+        context="kind-${cluster}"
+
+        if kind get clusters | grep -Fxq "${cluster}"; then
+          echo "kind cluster '${cluster}' already exists"
+          kubectl config use-context "${context}"
+          exit 0
+        fi
+
+        kind create cluster --name "${cluster}" --image "${image}"
 
   lint:
     desc: Run golangci-lint.
@@ -500,11 +523,6 @@ tasks:
     desc: Run fast unit tests without envtest setup.
     cmds:
       - go test ./api/... ./internal/...
-
-  tilt:
-    desc: Run the operator in the local kind cluster with Tilt.
-    cmds:
-      - tilt up
 
   undeploy:
     desc: Remove the controller manager from the current Kubernetes context.
