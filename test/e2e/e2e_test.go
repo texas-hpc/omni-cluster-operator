@@ -49,11 +49,11 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace")
 
 		By("installing CRDs")
-		_, err = utils.Run(exec.Command("mise", "run", "install"))
+		_, err = utils.Run(exec.Command("task", "install"))
 		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
 
 		By("deploying the controller-manager")
-		cmd := exec.Command("mise", "run", "deploy")
+		cmd := exec.Command("task", "deploy")
 		cmd.Env = append(cmd.Environ(), fmt.Sprintf("IMG=%s", managerImage))
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to deploy controller-manager")
@@ -66,12 +66,12 @@ var _ = Describe("Omni cluster operator", Ordered, func() {
 			"--all", "-n", namespace, "--ignore-not-found", "--timeout=60s"))
 
 		By("undeploying the controller-manager")
-		cmd := exec.Command("mise", "run", "undeploy")
+		cmd := exec.Command("task", "undeploy")
 		cmd.Env = append(cmd.Environ(), "IGNORE_NOT_FOUND=true")
 		_, _ = utils.Run(cmd)
 
 		By("uninstalling CRDs")
-		cmd = exec.Command("mise", "run", "uninstall")
+		cmd = exec.Command("task", "uninstall")
 		cmd.Env = append(cmd.Environ(), "IGNORE_NOT_FOUND=true")
 		_, _ = utils.Run(cmd)
 
@@ -257,7 +257,7 @@ spec:
     name: worker
     size: unlimited
 	`)
-			Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func(g Gomega) {
 			output, err := utils.Run(exec.Command("kubectl", "get", "omnicluster", "e2e-suspended",
@@ -272,8 +272,8 @@ spec:
 		}).Should(Succeed())
 	})
 
-		It("marks child template documents that reference a missing cluster", func() {
-			_, err := kubectlApply(`
+	It("marks child template documents that reference a missing cluster", func() {
+		_, err := kubectlApply(`
 apiVersion: omni.texashpc.com/v1alpha1
 kind: OmniMachine
 metadata:
@@ -290,10 +290,10 @@ spec:
 			output, err := utils.Run(exec.Command("kubectl", "get", "omnimachine",
 				"e2e-missing-cluster-machine", "-n", namespace,
 				"-o", "jsonpath={.status.conditions[?(@.type=='Accepted')].reason}"))
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("MissingCluster"))
-			}).Should(Succeed())
-		})
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(output).To(Equal("MissingCluster"))
+		}).Should(Succeed())
+	})
 })
 
 func kubectlApply(manifest string) (string, error) {
