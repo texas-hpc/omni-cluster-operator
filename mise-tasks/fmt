@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Run go fmt."
-set -euo pipefail
-
-go fmt ./...

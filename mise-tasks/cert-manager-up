@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Install cert-manager into the current Kubernetes context."
-set -euo pipefail
-
-version="${CERT_MANAGER_VERSION:-v1.20.2}"
-url="https://github.com/cert-manager/cert-manager/releases/download/${version}/cert-manager.yaml"
-
-kubectl apply -f "${url}"
-kubectl wait deployment.apps/cert-manager-webhook --for=condition=Available --namespace cert-manager --timeout=5m

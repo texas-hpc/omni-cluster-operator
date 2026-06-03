@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Remove the optional local Omni live-test fixture."
-set -euo pipefail
-
-namespace="${OMNI_NAMESPACE:-omni-system}"
-helm uninstall omni -n "${namespace}" --ignore-not-found
-kubectl delete -f hack/omni/dex.yaml --ignore-not-found
-kubectl delete namespace "${namespace}" --ignore-not-found

@@ -7,12 +7,18 @@ tilt = "0.37.3"
 kubectl = "1.36.1"
 kustomize = "5.8.1"
 helm = "4.2.0"
+task = "3.51.1"
 "aqua:norwoodj/helm-docs" = "1.14.2"
+uv = "0.11.18"
 dotnet = "10.0.300"
+"dotnet:nbgv" = "3.9.50"
 golangci-lint = "2.12.2"
 omnictl = "1.8.1"
 "go:sigs.k8s.io/controller-tools/cmd/controller-gen" = "v0.21.0"
 "go:sigs.k8s.io/controller-runtime/tools/setup-envtest" = "release-0.23"
+
+[settings]
+experimental = true
 
 [env]
 KIND_CLUSTER = "omni-cluster-operator-dev"

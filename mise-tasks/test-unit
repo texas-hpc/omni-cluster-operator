@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Run fast unit tests without envtest setup."
-set -euo pipefail
-
-go test ./api/... ./internal/...

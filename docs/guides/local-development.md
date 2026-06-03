@@ -9,24 +9,25 @@ mise trust
 mise install
 ```
 
-There is intentionally no Makefile. Use `mise run <task>`.
+There is intentionally no Makefile. Use `task <task>`; task definitions live in
+`Taskfile.yml`.
 
 ## Run the operator locally in kind
 
 ```sh
-mise run kind-up
-mise run cert-manager-up
-mise run tilt
+task kind-up
+task cert-manager-up
+task tilt
 ```
 
 Tilt builds `controller:latest`, applies the default Kustomize deployment, and exposes the health endpoint on port `8081`.
 
-`mise run cert-manager-up` is only for the local development cluster created by this repository. Do not use it as end-user installation guidance for production clusters.
+`task cert-manager-up` is only for the local development cluster created by this repository. Do not use it as end-user installation guidance for production clusters.
 
 ## Render samples
 
 ```sh
-mise run samples
+task samples
 ```
 
 Apply samples only after replacing placeholder values:
@@ -40,19 +41,19 @@ kubectl apply -k config/samples
 Fast loop:
 
 ```sh
-mise run test-unit
+task test-unit
 ```
 
 Full local verification:
 
 ```sh
-mise run test
-mise run lint
-mise run build
-mise run samples
-mise run render-default
-mise run chart-lint
-mise run chart-template
+task test
+task lint
+task build
+task samples
+task render-default
+task chart-lint
+task chart-template
 ```
 
 ## Work on documentation
@@ -60,13 +61,13 @@ mise run chart-template
 Build the documentation site:
 
 ```sh
-mise run docs-build
+task docs-build
 ```
 
 Serve it locally:
 
 ```sh
-mise run docs-serve
+task docs-serve
 ```
 
 The local server listens on `127.0.0.1:8000` unless `MKDOCS_DEV_ADDR` is set.

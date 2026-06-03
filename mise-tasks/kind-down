@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Delete the local kind cluster through ctlptl."
-set -euo pipefail
-
-ctlptl delete -f hack/kind/cluster.yaml

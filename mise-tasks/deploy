@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Deploy the controller manager to the current Kubernetes context."
-set -euo pipefail
-
-image="${IMG:-${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}}"
-
-mise run manifests
-
-hack/mise/kustomize-build-with-image config/default "${image}" | kubectl apply -f -

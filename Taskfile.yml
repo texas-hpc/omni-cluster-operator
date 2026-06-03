@@ -1,0 +1,535 @@
+version: '3'
+
+silent: true
+set: [e, u, pipefail]
+
+tasks:
+  default:
+    desc: List available tasks.
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the manager binary.
+    cmds:
+      - task: manifests
+      - task: generate
+      - task: fmt
+      - task: vet
+      - go build -o bin/manager cmd/main.go
+
+  build-installer:
+    desc: Generate a consolidated install manifest in dist/install.yaml.
+    cmds:
+      - task: manifests
+      - task: generate
+      - mkdir -p dist
+      - task: render-default-with-image
+        vars:
+          OUTPUT: dist/install.yaml
+
+  cert-manager-down:
+    desc: Remove cert-manager from the current Kubernetes context.
+    cmds:
+      - |
+        version="${CERT_MANAGER_VERSION:-v1.20.2}"
+        url="https://github.com/cert-manager/cert-manager/releases/download/${version}/cert-manager.yaml"
+
+        kubectl delete --ignore-not-found -f "${url}"
+        kubectl delete lease cert-manager-cainjector-leader-election cert-manager-controller \
+          -n kube-system --ignore-not-found --force --grace-period=0
+
+  cert-manager-up:
+    desc: Install cert-manager into the current Kubernetes context.
+    cmds:
+      - |
+        version="${CERT_MANAGER_VERSION:-v1.20.2}"
+        url="https://github.com/cert-manager/cert-manager/releases/download/${version}/cert-manager.yaml"
+
+        kubectl apply -f "${url}"
+        kubectl wait deployment.apps/cert-manager-webhook --for=condition=Available --namespace cert-manager --timeout=5m
+
+  chart-docs:
+    desc: Generate Helm chart README files.
+    cmds:
+      - |
+        helm-docs \
+          --chart-search-root charts \
+          --template-files README.md.gotmpl \
+          --sort-values-order file
+
+  chart-docs-check:
+    desc: Check generated Helm chart README files.
+    cmds:
+      - task: chart-docs
+      - |
+        git diff --exit-code -- \
+          charts/omni-cluster-operator/README.md \
+          charts/omni-cluster-operator-crds/README.md
+
+  chart-lint:
+    desc: Lint the Helm charts.
+    cmds:
+      - helm lint charts/omni-cluster-operator-crds
+      - helm lint charts/omni-cluster-operator
+
+  chart-package:
+    desc: Package the Helm charts using the NBGV version.
+    cmds:
+      - |
+        chart_version="${CHART_VERSION:-}"
+        if [[ -z "${chart_version}" ]]; then
+          chart_version="$(nbgv get-version -v SemVer2)"
+        fi
+        app_version="${APP_VERSION:-${chart_version}}"
+        destination="${CHART_DESTINATION:-dist/charts}"
+
+        mkdir -p "${destination}"
+        helm package charts/omni-cluster-operator-crds \
+          --destination "${destination}" \
+          --version "${chart_version}" \
+          --app-version "${app_version}"
+        helm package charts/omni-cluster-operator \
+          --destination "${destination}" \
+          --version "${chart_version}" \
+          --app-version "${app_version}"
+
+  chart-sync-crds:
+    desc: Copy generated CRDs into the CRD Helm chart.
+    cmds:
+      - |
+        rm -rf charts/omni-cluster-operator/crds
+        mkdir -p charts/omni-cluster-operator-crds/crds
+        cp config/crd/bases/*.yaml charts/omni-cluster-operator-crds/crds/
+
+  chart-template:
+    desc: Render the Helm charts.
+    cmds:
+      - |
+        output="{{.OUTPUT}}"
+        if [[ -n "${output}" ]]; then
+          exec > "${output}"
+        fi
+
+        chart_version="${CHART_VERSION:-}"
+        if [[ -z "${chart_version}" ]]; then
+          chart_version="$(nbgv get-version -v SemVer2)"
+        fi
+        image_repository="${IMAGE_REPOSITORY:-ghcr.io/texas-hpc/omni-cluster-operator}"
+        image_tag="${IMAGE_TAG:-${chart_version}}"
+
+        helm template omni-cluster-operator-crds charts/omni-cluster-operator-crds \
+          --include-crds \
+          --namespace omni-cluster-operator-system
+
+        helm template omni-cluster-operator charts/omni-cluster-operator \
+          --namespace omni-cluster-operator-system \
+          --set "image.repository=${image_repository}" \
+          --set "image.tag=${image_tag}"
+
+  ci:
+    desc: Run local CI verification tasks.
+    cmds:
+      - task: test
+      - task: lint-config
+      - task: lint
+      - task: build
+      - task: samples
+        vars:
+          OUTPUT: /dev/null
+      - task: render-default
+        vars:
+          OUTPUT: /dev/null
+      - task: chart-lint
+      - task: chart-template
+        vars:
+          OUTPUT: /dev/null
+
+  cleanup-test-e2e:
+    desc: Delete the isolated kind cluster used by e2e tests.
+    cmds:
+      - kind delete cluster --name "${E2E_KIND_CLUSTER:-omni-cluster-operator-test-e2e}"
+
+  deploy:
+    desc: Deploy the controller manager to the current Kubernetes context.
+    cmds:
+      - task: manifests
+      - task: render-default-with-image
+        vars:
+          APPLY: "true"
+
+  docker-build:
+    desc: Build the manager container image.
+    cmds:
+      - |
+        image="${IMG:-${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}}"
+        "${CONTAINER_TOOL:-docker}" build -t "${image}" .
+
+  docker-buildx:
+    desc: Build and push a multi-arch manager image with docker buildx.
+    cmds:
+      - |
+        container_tool="${CONTAINER_TOOL:-docker}"
+        builder_name="omni-cluster-operator-builder"
+        platforms="${PLATFORMS:-linux/arm64,linux/amd64,linux/s390x,linux/ppc64le}"
+        image="${IMG:-${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}}"
+        tmp_dockerfile="$(mktemp Dockerfile.cross.XXXXXX)"
+        trap 'rm -f "${tmp_dockerfile}"; "${container_tool}" buildx rm "${builder_name}" >/dev/null 2>&1 || true' EXIT
+
+        awk '
+          /^FROM / && !done {
+            sub(/^FROM /, "FROM --platform=${BUILDPLATFORM} ")
+            done = 1
+          }
+          { print }
+        ' Dockerfile > "${tmp_dockerfile}"
+        "${container_tool}" buildx create --name "${builder_name}" >/dev/null 2>&1 || true
+        "${container_tool}" buildx use "${builder_name}"
+        "${container_tool}" buildx build --push --platform="${platforms}" --tag "${image}" -f "${tmp_dockerfile}" .
+
+  docker-push:
+    desc: Push the manager container image.
+    cmds:
+      - |
+        image="${IMG:-${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}}"
+        "${CONTAINER_TOOL:-docker}" push "${image}"
+
+  docs-build:
+    desc: Build the MkDocs site.
+    cmds:
+      - uv run --with-requirements docs/requirements.txt mkdocs build --strict
+
+  docs-serve:
+    desc: Serve the MkDocs site locally.
+    cmds:
+      - uv run --with-requirements docs/requirements.txt mkdocs serve --dev-addr "${MKDOCS_DEV_ADDR:-127.0.0.1:8000}"
+
+  ensure-golangci-lint:
+    internal: true
+    cmds:
+      - |
+        if [[ ! -f .custom-gcl.yml ]]; then
+          exit 0
+        fi
+
+        mkdir -p bin
+        binary="bin/golangci-lint"
+
+        if [[ ! -x "${binary}" || .custom-gcl.yml -nt "${binary}" ]]; then
+          echo "Building custom golangci-lint with module plugins..."
+          golangci-lint custom --destination bin --name golangci-lint-custom
+          mv -f bin/golangci-lint-custom "${binary}"
+        fi
+
+  fmt:
+    desc: Run go fmt.
+    cmds:
+      - go fmt ./...
+
+  generate:
+    desc: Generate Kubernetes deepcopy code.
+    cmds:
+      - |
+        year="${YEAR:-$(date +%Y)}"
+        controller-gen object:headerFile="hack/boilerplate.go.txt",year="${year}" paths="./..."
+
+  install:
+    desc: Install CRDs into the current Kubernetes context.
+    cmds:
+      - task: manifests
+      - |
+        out="$(kustomize build config/crd 2>/dev/null || true)"
+        if [[ -z "${out}" ]]; then
+          echo "No CRDs to install; skipping."
+          exit 0
+        fi
+
+        printf '%s\n' "${out}" | kubectl apply -f -
+
+  kind-down:
+    desc: Delete the local kind cluster through ctlptl.
+    cmds:
+      - ctlptl delete -f hack/kind/cluster.yaml
+
+  kind-up:
+    desc: Create the local kind cluster through ctlptl.
+    cmds:
+      - ctlptl apply -f hack/kind/cluster.yaml
+
+  lint:
+    desc: Run golangci-lint.
+    cmds:
+      - task: ensure-golangci-lint
+      - |
+        if [[ -f .custom-gcl.yml ]]; then
+          bin/golangci-lint run
+        else
+          golangci-lint run
+        fi
+
+  lint-config:
+    desc: Verify golangci-lint configuration.
+    cmds:
+      - task: ensure-golangci-lint
+      - |
+        if [[ -f .custom-gcl.yml ]]; then
+          bin/golangci-lint config verify
+        else
+          golangci-lint config verify
+        fi
+
+  lint-fix:
+    desc: Run golangci-lint and apply fixes.
+    cmds:
+      - task: ensure-golangci-lint
+      - |
+        if [[ -f .custom-gcl.yml ]]; then
+          bin/golangci-lint run --fix
+        else
+          golangci-lint run --fix
+        fi
+
+  manifests:
+    desc: Generate CRDs, RBAC, and webhook manifests.
+    cmds:
+      - controller-gen rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+      - task: chart-sync-crds
+
+  omni-down:
+    desc: Remove the optional local Omni live-test fixture.
+    cmds:
+      - |
+        namespace="${OMNI_NAMESPACE:-omni-system}"
+        helm uninstall omni -n "${namespace}" --ignore-not-found
+        kubectl delete -f hack/omni/dex.yaml --ignore-not-found
+        kubectl delete namespace "${namespace}" --ignore-not-found
+
+  omni-status:
+    desc: Show status for the optional local Omni live-test fixture.
+    cmds:
+      - |
+        namespace="${OMNI_NAMESPACE:-omni-system}"
+        kubectl get deploy,pods,svc,pvc -n "${namespace}"
+
+  omni-template:
+    desc: Render the optional local Omni Helm fixture without installing it.
+    cmds:
+      - |
+        namespace="${OMNI_NAMESPACE:-omni-system}"
+        chart_version="${OMNI_CHART_VERSION:-2.8.0}"
+        omni_version="${OMNI_VERSION:-v1.8.0}"
+        key_file="$(hack/omni/generate-etcd-key .local/omni/omni.asc)"
+
+        helm template omni oci://ghcr.io/siderolabs/charts/omni \
+          --namespace "${namespace}" \
+          --version "${chart_version}" \
+          --values hack/omni/values.yaml \
+          --set "image.tag=${omni_version}" \
+          --set-file "etcdEncryptionKey.omniAsc=${key_file}"
+
+  omni-up:
+    desc: Install the optional local Omni live-test fixture into the current Kubernetes context.
+    cmds:
+      - |
+        namespace="${OMNI_NAMESPACE:-omni-system}"
+        chart_version="${OMNI_CHART_VERSION:-2.8.0}"
+        omni_version="${OMNI_VERSION:-v1.8.0}"
+        key_file="$(hack/omni/generate-etcd-key .local/omni/omni.asc)"
+
+        kubectl create namespace "${namespace}" --dry-run=client -o yaml | kubectl apply -f -
+        kubectl apply -f hack/omni/dex.yaml
+        kubectl wait deployment/omni-dex -n "${namespace}" --for=condition=Available --timeout=2m
+
+        helm upgrade --install omni oci://ghcr.io/siderolabs/charts/omni \
+          --namespace "${namespace}" \
+          --version "${chart_version}" \
+          --values hack/omni/values.yaml \
+          --set "image.tag=${omni_version}" \
+          --set-file "etcdEncryptionKey.omniAsc=${key_file}"
+
+        kubectl rollout status deployment/omni -n "${namespace}" --timeout=5m
+        hack/omni/wait-for-initial-service-account
+
+  render-default:
+    desc: Render the default deployment manifests.
+    cmds:
+      - |
+        output="{{.OUTPUT}}"
+        if [[ -n "${output}" ]]; then
+          exec > "${output}"
+        fi
+
+        kustomize build config/default
+
+  render-default-with-image:
+    desc: Render the default deployment manifests with an overridden manager image.
+    cmds:
+      - |
+        base="config/default"
+        image="{{.IMAGE}}"
+        if [[ -z "${image}" ]]; then
+          image="${IMAGE:-${IMG:-${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}}}"
+        fi
+        output="{{.OUTPUT}}"
+        apply="{{.APPLY}}"
+        tmpdir="$(mktemp -d .kustomize-image.XXXXXX)"
+        trap 'rm -rf "${tmpdir}"' EXIT
+
+        if [[ "${image}" == *@sha256:* ]]; then
+          new_name="${image%@sha256:*}"
+          digest="sha256:${image##*@sha256:}"
+          cat > "${tmpdir}/kustomization.yaml" <<EOF
+        resources:
+        - ../${base}
+        images:
+        - name: controller
+          newName: ${new_name}
+          digest: ${digest}
+        EOF
+        elif [[ "${image##*/}" == *:* ]]; then
+          new_name="${image%:*}"
+          new_tag="${image##*:}"
+          cat > "${tmpdir}/kustomization.yaml" <<EOF
+        resources:
+        - ../${base}
+        images:
+        - name: controller
+          newName: ${new_name}
+          newTag: ${new_tag}
+        EOF
+        else
+          cat > "${tmpdir}/kustomization.yaml" <<EOF
+        resources:
+        - ../${base}
+        images:
+        - name: controller
+          newName: ${image}
+        EOF
+        fi
+
+        if [[ -n "${output}" ]]; then
+          kustomize build --load-restrictor LoadRestrictionsNone "${tmpdir}" > "${output}"
+        elif [[ "${apply}" == "true" ]]; then
+          kustomize build --load-restrictor LoadRestrictionsNone "${tmpdir}" | kubectl apply -f -
+        else
+          kustomize build --load-restrictor LoadRestrictionsNone "${tmpdir}"
+        fi
+
+  run:
+    desc: Run the manager locally.
+    cmds:
+      - task: manifests
+      - task: generate
+      - task: fmt
+      - task: vet
+      - go run ./cmd/main.go
+
+  samples:
+    desc: Render sample CRs.
+    cmds:
+      - |
+        output="{{.OUTPUT}}"
+        if [[ -n "${output}" ]]; then
+          exec > "${output}"
+        fi
+
+        kustomize build config/samples
+
+  setup-envtest:
+    desc: Install envtest Kubernetes API server assets.
+    cmds:
+      - |
+        mkdir -p bin
+        setup-envtest use "${ENVTEST_K8S_VERSION:-1.35}" --bin-dir bin -p path
+
+  setup-test-e2e:
+    desc: Create the isolated kind cluster used by e2e tests.
+    cmds:
+      - |
+        cluster="${E2E_KIND_CLUSTER:-omni-cluster-operator-test-e2e}"
+        if kind get clusters | grep -Fxq "${cluster}"; then
+          echo "kind cluster '${cluster}' already exists"
+          exit 0
+        fi
+
+        kind create cluster --name "${cluster}"
+
+  test:
+    desc: Run generated-code, vet, and envtest-backed tests.
+    cmds:
+      - task: manifests
+      - task: generate
+      - task: fmt
+      - task: vet
+      - task: setup-envtest
+      - |
+        packages="$(go list ./... | grep -v '/test/e2e$')"
+        assets="$(setup-envtest use "${ENVTEST_K8S_VERSION:-1.35}" --bin-dir bin -p path)"
+        KUBEBUILDER_ASSETS="${assets}" go test ${packages} -coverprofile cover.out
+
+  test-e2e:
+    desc: Run kind-backed e2e tests.
+    cmds:
+      - defer:
+          task: cleanup-test-e2e
+        ignore_error: true
+      - task: setup-test-e2e
+      - task: manifests
+      - task: generate
+      - task: fmt
+      - task: vet
+      - KIND_CLUSTER="${E2E_KIND_CLUSTER:-omni-cluster-operator-test-e2e}" go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+
+  test-live-omni:
+    desc: Run opt-in live tests against a real Omni endpoint.
+    cmds:
+      - |
+        key_file="${OMNI_LIVE_SERVICE_ACCOUNT_KEY_FILE:-.local/omni/service-account.key}"
+        if [[ ! -s "${key_file}" ]]; then
+          echo "missing Omni service account key: ${key_file}" >&2
+          echo "run 'task omni-up' first, or set OMNI_E2E_SERVICE_ACCOUNT_KEY_FILE" >&2
+          exit 1
+        fi
+
+        OMNI_E2E_ENDPOINT="${OMNI_E2E_ENDPOINT:-${OMNI_LIVE_ENDPOINT:-http://omni.omni-system.svc.cluster.local:8080}}" \
+        OMNI_E2E_SERVICE_ACCOUNT_KEY_FILE="${OMNI_E2E_SERVICE_ACCOUNT_KEY_FILE:-${key_file}}" \
+        LIVE_OMNI_OPERATOR_NAMESPACE="${LIVE_OMNI_OPERATOR_NAMESPACE:-omni-cluster-operator-system}" \
+        go test -tags=live_omni ./test/live -v
+
+  test-unit:
+    desc: Run fast unit tests without envtest setup.
+    cmds:
+      - go test ./api/... ./internal/...
+
+  tilt:
+    desc: Run the operator in the local kind cluster with Tilt.
+    cmds:
+      - tilt up
+
+  undeploy:
+    desc: Remove the controller manager from the current Kubernetes context.
+    cmds:
+      - kustomize build config/default | kubectl delete --ignore-not-found="${IGNORE_NOT_FOUND:-${ignore_not_found:-false}}" -f -
+
+  uninstall:
+    desc: Uninstall CRDs from the current Kubernetes context.
+    cmds:
+      - task: manifests
+      - |
+        out="$(kustomize build config/crd 2>/dev/null || true)"
+        if [[ -z "${out}" ]]; then
+          echo "No CRDs to delete; skipping."
+          exit 0
+        fi
+
+        printf '%s\n' "${out}" | kubectl delete --ignore-not-found="${IGNORE_NOT_FOUND:-${ignore_not_found:-false}}" -f -
+
+  version:
+    desc: Print Nerdbank.GitVersioning version information.
+    cmds:
+      - nbgv get-version {{.CLI_ARGS}}
+
+  vet:
+    desc: Run go vet.
+    cmds:
+      - go vet ./...

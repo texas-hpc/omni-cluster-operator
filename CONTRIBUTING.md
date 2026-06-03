@@ -6,9 +6,9 @@ templates from Kubernetes custom resources.
 
 ## Development Setup
 
-This project requires [`mise`](https://mise.jdx.dev/) for toolchain management
-and project automation. Install it before running repository tasks. Common
-installation options include:
+This project uses [`mise`](https://mise.jdx.dev/) for toolchain management and
+[Task](https://taskfile.dev/) for project automation. Install `mise` before
+running repository tasks. Common installation options include:
 
 ```sh
 # macOS, via Homebrew
@@ -29,15 +29,15 @@ mise trust
 mise install
 ```
 
-There is intentionally no Makefile. Use `mise run <task>` for project
-automation. Executable task scripts live in `mise-tasks/`.
+There is intentionally no Makefile. Use `task <task>` for project automation.
+Task definitions live in `Taskfile.yml`.
 
 For local Kubernetes development:
 
 ```sh
-mise run kind-up
-mise run cert-manager-up
-mise run tilt
+task kind-up
+task cert-manager-up
+task tilt
 ```
 
 The default deployment includes validating webhooks and cert-manager
@@ -53,7 +53,7 @@ operator, running Tilt, or running e2e tests.
   delete, and status behavior to `pkg/template/operations`.
 - Keep child template resources bound to `OmniCluster.spec.clusterRef`.
   `OmniCluster` owns the `OmniConnection` selection.
-- Keep the live Omni fixture opt-in. `mise run omni-up` installs a real Omni
+- Keep the live Omni fixture opt-in. `task omni-up` installs a real Omni
   fixture into the current Kubernetes context, accepts the local-test EULA
   values, and writes credentials under `.local/`.
 - Keep secrets out of samples except obvious placeholders.
@@ -69,14 +69,14 @@ Do not hand-edit generated files unless you are changing generation itself:
 After changing API types or Kubebuilder markers, regenerate manifests and code:
 
 ```sh
-mise run manifests
-mise run generate
+task manifests
+task generate
 ```
 
 If chart CRD packaging is affected, also sync chart CRDs:
 
 ```sh
-mise run chart-sync-crds
+task chart-sync-crds
 ```
 
 ## Testing
@@ -84,28 +84,28 @@ mise run chart-sync-crds
 Use the fast loop while iterating:
 
 ```sh
-mise run test-unit
+task test-unit
 ```
 
 Before opening or updating a pull request, run the full local verification set
 that matches CI coverage:
 
 ```sh
-mise run test
-mise run lint
-mise run build
-mise run samples
-mise run render-default
-mise run chart-lint
-mise run chart-template
-mise run docs-build
+task test
+task lint
+task build
+task samples
+task render-default
+task chart-lint
+task chart-template
+task docs-build
 ```
 
 Optional real-Omni transport smoke tests stay explicit:
 
 ```sh
-mise run omni-template
-mise run test-live-omni
+task omni-template
+task test-live-omni
 ```
 
 ## GitHub Collaborator Access
@@ -140,13 +140,13 @@ real-Omni fixture is documented in
 Build the documentation site before changing docs:
 
 ```sh
-mise run docs-build
+task docs-build
 ```
 
 Serve it locally when reviewing rendered pages:
 
 ```sh
-mise run docs-serve
+task docs-serve
 ```
 
 ## Releases
