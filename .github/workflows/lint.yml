@@ -24,6 +24,7 @@ jobs:
       - name: Clone the code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Restore Go cache
@@ -51,6 +52,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ github.workflow }}-local-tools-
 
+      - name: Check pushed commit message
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          COMMITLINT_FROM: ${{ github.event.before }}
+          COMMITLINT_TO: ${{ github.sha }}
+        run: task commitlint
+      - name: Check pull request commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          COMMITLINT_FROM: ${{ github.event.pull_request.base.sha }}
+          COMMITLINT_TO: ${{ github.event.pull_request.head.sha }}
+        run: task commitlint
       - name: Check linter configuration
         run: task lint-config
       - name: Run linter

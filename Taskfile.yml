@@ -127,6 +127,25 @@ tasks:
           --set "image.repository=${image_repository}" \
           --set "image.tag=${image_tag}"
 
+  commitlint:
+    desc: Lint commit messages. Set COMMITLINT_FROM and COMMITLINT_TO to check a range.
+    cmds:
+      - |
+        from="${COMMITLINT_FROM:-}"
+        to="${COMMITLINT_TO:-HEAD}"
+        commitlint_node_path="$(mise where npm:@commitlint/config-conventional)/lib/node_modules"
+        if [[ -n "${NODE_PATH-}" ]]; then
+          export NODE_PATH="${commitlint_node_path}:${NODE_PATH}"
+        else
+          export NODE_PATH="${commitlint_node_path}"
+        fi
+
+        if [[ -n "${from}" ]]; then
+          commitlint --from "${from}" --to "${to}" --verbose
+        else
+          commitlint --last --verbose
+        fi
+
   ci:
     desc: Run local CI verification tasks.
     cmds:

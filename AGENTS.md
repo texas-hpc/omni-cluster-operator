@@ -3,6 +3,10 @@
 This is a Kubebuilder/controller-runtime Go operator for Sidero Omni cluster
 templates.
 
+Before making changes, read [`CONTRIBUTING.md`](CONTRIBUTING.md) and follow its
+contributor workflow, commit-message, verification, and release-versioning
+guidance.
+
 ## Project Rules
 
 - Keep `github.com/siderolabs/omni/client` as the integration boundary.

@@ -1,5 +1,8 @@
 [tools]
 go = "1.26.4"
+node = "24.16.0"
+"npm:@commitlint/cli" = "21.0.2"
+"npm:@commitlint/config-conventional" = "21.0.2"
 kubebuilder = "4.14.0"
 kind = "0.32.0"
 skaffold = "2.21.0"
