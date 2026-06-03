@@ -1,0 +1,27 @@
+apiVersion: skaffold/v4beta14
+kind: Config
+metadata:
+  name: omni-cluster-operator
+build:
+  local:
+    push: false
+  artifacts:
+  - image: controller
+    hooks:
+      before:
+      - command: ["task", "manifests"]
+        os: [darwin, linux]
+    docker:
+      dockerfile: Dockerfile
+manifests:
+  kustomize:
+    paths:
+    - config/default
+deploy:
+  kubectl: {}
+portForward:
+- resourceType: deployment
+  resourceName: omni-cluster-operator-controller-manager
+  namespace: omni-cluster-operator-system
+  port: 8081
+  localPort: 8081

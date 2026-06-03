@@ -37,12 +37,12 @@ For local Kubernetes development:
 ```sh
 task kind-up
 task cert-manager-up
-task tilt
+task dev
 ```
 
 The default deployment includes validating webhooks and cert-manager
 `Certificate` resources, so cert-manager must be installed before deploying the
-operator, running Tilt, or running e2e tests.
+operator, running Skaffold, or running e2e tests.
 
 ## Project Boundaries
 

@@ -59,9 +59,7 @@ the live smoke test:
 task kind-up
 task omni-up
 task cert-manager-up
-task docker-build
-kind load docker-image "${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}" --name "${KIND_CLUSTER:-omni-cluster-operator-dev}"
-task deploy
+task dev-deploy
 task test-live-omni
 ```
 

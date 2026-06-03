@@ -13,7 +13,8 @@ templates.
 - Keep child template resources bound to `OmniCluster.spec.clusterRef`; the
   `OmniCluster` owns the `OmniConnection` selection.
 - The default deployment includes validating webhooks and cert-manager
-  certificate resources; install cert-manager before `task deploy`, Tilt, or e2e.
+  certificate resources; install cert-manager before `task deploy`, `task dev`,
+  or e2e.
 - Use `task <task>` for project automation. There is intentionally no Makefile;
   task definitions live in `Taskfile.yml`.
 - Keep the live Omni fixture opt-in. `task omni-up` installs real Omni into
