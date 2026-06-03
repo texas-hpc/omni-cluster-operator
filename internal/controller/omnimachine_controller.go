@@ -20,12 +20,10 @@ import (
 	"context"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
 )
@@ -33,7 +31,6 @@ import (
 // OmniMachineReconciler reconciles a OmniMachine object
 type OmniMachineReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnimachines,verbs=get;list;watch;create;update;patch;delete
@@ -42,8 +39,6 @@ type OmniMachineReconciler struct {
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omniclusters,verbs=get;list;watch
 
 func (r *OmniMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
-
 	machine := &omniv1alpha1.OmniMachine{}
 	if err := r.Get(ctx, req.NamespacedName, machine); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -53,7 +48,7 @@ func (r *OmniMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	exists, err := (childStatusClient{Client: r.Client, Scheme: r.Scheme}).clusterExists(ctx, machine.Namespace, machine.Spec.ClusterRef.Name)
+	exists, err := (childStatusClient{Client: r.Client}).clusterExists(ctx, machine.Namespace, machine.Spec.ClusterRef.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

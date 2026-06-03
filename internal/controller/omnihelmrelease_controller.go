@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -50,7 +49,6 @@ type HelmReleaseClient interface {
 // OmniHelmReleaseReconciler reconciles an OmniHelmRelease object.
 type OmniHelmReleaseReconciler struct {
 	client.Client
-	Scheme       *runtime.Scheme
 	SecretReader client.Reader
 	Helm         HelmReleaseClient
 }
@@ -90,7 +88,7 @@ func (r *OmniHelmReleaseReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, statusErr
 	}
 
-	exists, err := (childStatusClient{Client: r.Client, Scheme: r.Scheme}).clusterExists(ctx, item.Namespace, item.Spec.ClusterRef.Name)
+	exists, err := (childStatusClient{Client: r.Client}).clusterExists(ctx, item.Namespace, item.Spec.ClusterRef.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

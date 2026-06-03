@@ -23,7 +23,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -32,7 +31,6 @@ import (
 
 type childStatusClient struct {
 	client.Client
-	Scheme *runtime.Scheme
 }
 
 func (r childStatusClient) clusterExists(ctx context.Context, namespace, name string) (bool, error) {
