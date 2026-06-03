@@ -155,6 +155,7 @@ spec:
     version: v1.35.0
     manifests:
       - name: platform-namespace
+        mode: full
         inline:
           - apiVersion: v1
             kind: Namespace
