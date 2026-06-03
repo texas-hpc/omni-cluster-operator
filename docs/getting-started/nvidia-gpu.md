@@ -178,13 +178,14 @@ spec:
     version: v1.35.0
     manifests:
       - name: gpu-operator-namespace
+        mode: full
         inline:
-          apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: gpu-operator
-            labels:
-              pod-security.kubernetes.io/enforce: privileged
+          - apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: gpu-operator
+              labels:
+                pod-security.kubernetes.io/enforce: privileged
   talos:
     version: v1.13.2
 ```
