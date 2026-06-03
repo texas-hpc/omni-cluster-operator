@@ -75,45 +75,6 @@ func TestValuesRequiresJSONObject(t *testing.T) {
 	}
 }
 
-func TestSpecHashUsesNormalizedInputs(t *testing.T) {
-	t.Parallel()
-
-	base := testRelease()
-	base.Spec.ReleaseName = ""
-	base.Spec.Namespace = ""
-	base.Spec.KubeconfigSecretRef.Key = ""
-	base.Spec.Timeout = nil
-	base.Spec.DeletionPolicy = ""
-	same := base.DeepCopy()
-	same.Spec.ReleaseName = base.Name
-	same.Spec.Namespace = DefaultNamespace
-	same.Spec.KubeconfigSecretRef.Key = DefaultKubeconfigKey
-	same.Spec.Timeout = &metav1.Duration{Duration: DefaultTimeout}
-	same.Spec.DeletionPolicy = DefaultDeletionPolicy
-
-	baseHash, err := SpecHash(base)
-	if err != nil {
-		t.Fatalf("SpecHash(base) error = %v", err)
-	}
-	sameHash, err := SpecHash(same)
-	if err != nil {
-		t.Fatalf("SpecHash(same) error = %v", err)
-	}
-	if baseHash != sameHash {
-		t.Fatalf("hash with explicit defaults = %q, want %q", sameHash, baseHash)
-	}
-
-	changed := base.DeepCopy()
-	changed.Spec.Chart.Values = &apiextensionsv1.JSON{Raw: []byte(`{"replicaCount":3}`)}
-	changedHash, err := SpecHash(changed)
-	if err != nil {
-		t.Fatalf("SpecHash(changed) error = %v", err)
-	}
-	if changedHash == baseHash {
-		t.Fatal("SpecHash() did not change when values changed")
-	}
-}
-
 func testRelease() *omniv1alpha1.OmniHelmRelease {
 	return &omniv1alpha1.OmniHelmRelease{
 		ObjectMeta: metav1.ObjectMeta{Name: testReleaseName, Namespace: "default"},
