@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Check generated Helm chart README files."
-set -euo pipefail
-
-mise run chart-docs
-git diff --exit-code -- \
-  charts/omni-cluster-operator/README.md \
-  charts/omni-cluster-operator-crds/README.md

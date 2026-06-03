@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Generate CRDs, RBAC, and webhook manifests."
-set -euo pipefail
-
-controller-gen rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-mise run chart-sync-crds

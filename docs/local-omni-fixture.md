@@ -49,29 +49,29 @@ References:
 Render the Omni chart without installing it:
 
 ```sh
-mise run omni-template >/tmp/omni-render.yaml
+task omni-template >/tmp/omni-render.yaml
 ```
 
 Create the local Kubernetes cluster, install Omni, deploy the operator, and run
 the live smoke test:
 
 ```sh
-mise run kind-up
-mise run omni-up
-mise run cert-manager-up
-mise run docker-build
+task kind-up
+task omni-up
+task cert-manager-up
+task docker-build
 kind load docker-image "${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}" --name "${KIND_CLUSTER:-omni-cluster-operator-dev}"
-mise run deploy
-mise run test-live-omni
+task deploy
+task test-live-omni
 ```
 
 Inspect or remove the fixture:
 
 ```sh
-mise run omni-status
-mise run omni-down
-mise run undeploy
-mise run kind-down
+task omni-status
+task omni-down
+task undeploy
+task kind-down
 ```
 
 The default endpoint is the in-cluster Omni service:
@@ -94,7 +94,7 @@ self-signed certificates.
 
 ## Current Test Contract
 
-`mise run test-live-omni` currently verifies:
+`task test-live-omni` currently verifies:
 
 1. The target namespace already exists, which means the operator deployment has
    been installed.

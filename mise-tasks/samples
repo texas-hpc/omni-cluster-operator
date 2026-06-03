@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Render sample CRs."
-set -euo pipefail
-
-kustomize build config/samples

@@ -47,9 +47,9 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: bin
-          key: ${{ runner.os }}-${{ github.workflow }}-local-tools-${{ hashFiles('mise.toml', 'mise-tasks/**', 'hack/mise/**', '.custom-gcl.yml', 'go.mod', 'go.sum') }}
+          key: ${{ runner.os }}-${{ github.workflow }}-local-tools-${{ hashFiles('mise.toml', 'Taskfile.yml', '.custom-gcl.yml', 'go.mod', 'go.sum') }}
           restore-keys: |
             ${{ runner.os }}-${{ github.workflow }}-local-tools-
 
       - name: Running Tests
-        run: mise run test
+        run: task test

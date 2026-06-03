@@ -47,7 +47,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: bin
-          key: ${{ runner.os }}-${{ github.workflow }}-local-tools-${{ hashFiles('mise.toml', 'mise-tasks/**', 'hack/mise/**', '.custom-gcl.yml', 'go.mod', 'go.sum') }}
+          key: ${{ runner.os }}-${{ github.workflow }}-local-tools-${{ hashFiles('mise.toml', 'Taskfile.yml', '.custom-gcl.yml', 'go.mod', 'go.sum') }}
           restore-keys: |
             ${{ runner.os }}-${{ github.workflow }}-local-tools-
 
@@ -71,4 +71,4 @@ jobs:
       - name: Running Test e2e
         env:
           E2E_SKIP_MANAGER_IMAGE_BUILD: "true"
-        run: mise run test-e2e
+        run: task test-e2e

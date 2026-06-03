@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-#MISE description="Build the manager container image."
-set -euo pipefail
-
-image="${IMG:-${OMNI_OPERATOR_IMG:-omni-cluster-operator:dev}}"
-"${CONTAINER_TOOL:-docker}" build -t "${image}" .

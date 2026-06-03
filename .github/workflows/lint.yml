@@ -47,21 +47,21 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: bin
-          key: ${{ runner.os }}-${{ github.workflow }}-local-tools-${{ hashFiles('mise.toml', 'mise-tasks/**', 'hack/mise/**', '.custom-gcl.yml', 'go.mod', 'go.sum') }}
+          key: ${{ runner.os }}-${{ github.workflow }}-local-tools-${{ hashFiles('mise.toml', 'Taskfile.yml', '.custom-gcl.yml', 'go.mod', 'go.sum') }}
           restore-keys: |
             ${{ runner.os }}-${{ github.workflow }}-local-tools-
 
       - name: Check linter configuration
-        run: mise run lint-config
+        run: task lint-config
       - name: Run linter
-        run: mise run lint
+        run: task lint
       - name: Check Helm charts
         env:
           CHART_VERSION: 0.0.0-ci
           APP_VERSION: 0.0.0-ci
           IMAGE_TAG: 0.0.0-ci
         run: |
-          mise run chart-docs-check
-          mise run chart-lint
-          mise run chart-template >/dev/null
-          mise run chart-package
+          task chart-docs-check
+          task chart-lint
+          task chart-template >/dev/null
+          task chart-package

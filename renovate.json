@@ -47,8 +47,8 @@
     {
       "customType": "regex",
       "description": "Update Nerdbank.GitVersioning CLI version",
-      "fileMatch": ["(^|/)mise\\.toml$", "(^|/)hack/mise/nbgv$"],
-      "matchStrings": ["NBGV_VERSION = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"", "NBGV_VERSION:-(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "fileMatch": ["(^|/)mise\\.toml$"],
+      "matchStrings": ["\"dotnet:nbgv\" = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"", "NBGV_VERSION = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\"", "NBGV_VERSION:-(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "datasourceTemplate": "nuget",
       "depNameTemplate": "nbgv",
       "versioningTemplate": "nuget"
