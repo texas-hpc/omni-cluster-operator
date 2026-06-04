@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -43,8 +44,19 @@ func (v *OmniSecretSyncCustomValidator) ValidateCreate(_ context.Context, obj *o
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type OmniSecretSync.
-func (v *OmniSecretSyncCustomValidator) ValidateUpdate(_ context.Context, _ *omniv1alpha1.OmniSecretSync, newObj *omniv1alpha1.OmniSecretSync) (admission.Warnings, error) {
-	return secretSyncWarnings(newObj), invalid("OmniSecretSync", newObj.Name, validateSecretSync(newObj))
+func (v *OmniSecretSyncCustomValidator) ValidateUpdate(_ context.Context, oldObj *omniv1alpha1.OmniSecretSync, newObj *omniv1alpha1.OmniSecretSync) (admission.Warnings, error) {
+	allErrs := validateSecretSync(newObj)
+
+	// Make destination-cluster fields immutable to prevent secret leaks
+	specPath := field.NewPath("spec")
+	if oldObj.Spec.KubeconfigSecretRef.Name != newObj.Spec.KubeconfigSecretRef.Name {
+		allErrs = append(allErrs, field.Forbidden(specPath.Child("kubeconfigSecretRef", "name"), "kubeconfigSecretRef.name is immutable"))
+	}
+	if oldObj.Spec.KubeconfigSecretRef.Key != newObj.Spec.KubeconfigSecretRef.Key {
+		allErrs = append(allErrs, field.Forbidden(specPath.Child("kubeconfigSecretRef", "key"), "kubeconfigSecretRef.key is immutable"))
+	}
+
+	return secretSyncWarnings(newObj), invalid("OmniSecretSync", newObj.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type OmniSecretSync.
