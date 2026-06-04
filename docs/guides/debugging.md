@@ -70,6 +70,7 @@ The chart installs validating webhooks. If `kubectl apply` fails before an objec
 - Duplicate names in `OmniCluster.spec.kubernetes.manifests[]`.
 - Invalid `OmniKubeconfigExport` fields, such as blank service-account groups, `renewBefore` greater than or equal to `ttl`, or `system:masters` without `serviceAccount.allowClusterAdmin: true`.
 - Invalid `OmniHelmRelease` fields, such as malformed chart values, missing kubeconfig Secret references, or direct Helm credentials that do not have workload-cluster RBAC.
+- Invalid `OmniSecretSync` fields, such as missing source or target Secret references, blank kubeconfig Secret keys, or unsupported deletion policies.
 
 ## Kubeconfig export issues
 
@@ -113,6 +114,22 @@ kubectl describe omnihelmrelease cluster-01-metrics-server \
 ```
 
 Common causes are missing kubeconfig Secret data, insufficient workload-cluster RBAC for the exported user or group, unreachable chart repositories, invalid chart versions, invalid values, or Helm wait timeouts.
+
+## Secret sync issues
+
+`OmniSecretSync` reads a management-cluster source Secret and writes a target Secret directly into the workload cluster using the referenced kubeconfig Secret.
+
+If a sync is not ready, check the sync, source Secret, and kubeconfig Secret:
+
+```sh
+kubectl get omnisecretsyncs,secrets \
+  --namespace omni-cluster-operator-system
+
+kubectl describe omnisecretsync cluster-01-ghcr \
+  --namespace omni-cluster-operator-system
+```
+
+Common causes are missing source Secret data, a missing or invalid kubeconfig Secret key, insufficient workload-cluster RBAC for Secret writes, a missing target namespace when `createNamespace` is false, or an immutable target Secret that cannot be updated.
 
 ## Stuck deletion
 

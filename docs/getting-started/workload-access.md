@@ -22,7 +22,7 @@ The operator does not automatically write workload-cluster kubeconfigs or talosc
 
 Use `OmniKubeconfigExport` when a controller, job, or GitOps workflow in the management cluster needs a workload-cluster kubeconfig Secret.
 
-`OmniHelmRelease` is one such consumer. It uses the exported kubeconfig Secret to reconcile Helm releases directly in the workload cluster.
+`OmniHelmRelease` and `OmniSecretSync` are two such consumers. `OmniHelmRelease` reconciles Helm releases directly in the workload cluster. `OmniSecretSync` copies a management-cluster Secret into the workload cluster.
 
 ```yaml
 apiVersion: omni.texashpc.com/v1alpha1
@@ -50,7 +50,7 @@ The operator asks Omni for a service-account kubeconfig for the referenced clust
 
 ## Secret shape
 
-The target Secret is created in the same namespace as the `OmniKubeconfigExport`.
+The exported kubeconfig Secret is created in the same namespace as the `OmniKubeconfigExport`.
 
 ```sh
 kubectl get secret cluster-01-automation-kubeconfig \
@@ -107,3 +107,30 @@ serviceAccount:
 ```
 
 Use that only for deliberate cluster-admin exports. Prefer a scoped group such as `cluster-automation`, with workload-cluster RBAC granting only the permissions the consumer needs.
+
+## Secret sync
+
+Use `OmniSecretSync` when a workload cluster needs a Secret that should not live in Git, such as a private OCI registry credential. The source Secret must already exist in the operator namespace.
+
+```yaml
+apiVersion: omni.texashpc.com/v1alpha1
+kind: OmniSecretSync
+metadata:
+  name: cluster-01-ghcr
+  namespace: omni-cluster-operator-system
+spec:
+  clusterRef:
+    name: cluster-01
+  kubeconfigSecretRef:
+    name: cluster-01-automation-kubeconfig
+  sourceSecretRef:
+    name: cluster-01-ghcr
+  targetSecretRef:
+    name: cluster-01-ghcr
+    namespace: flux-system
+  type: kubernetes.io/dockerconfigjson
+  createNamespace: true
+  deletionPolicy: Delete
+```
+
+The operator copies the source Secret `data` to the workload target Secret and uses the source Secret type unless `spec.type` is set. It does not copy source labels, annotations, owner references, or resource metadata. The target Secret receives operator ownership metadata so `deletionPolicy: Delete` can clean it up safely.

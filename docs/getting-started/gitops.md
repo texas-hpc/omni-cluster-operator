@@ -79,14 +79,16 @@ When deleting a full cluster from Git, delete child resources and the parent in 
 
 ## Managed manifests and Helm in GitOps
 
-`OmniCluster.spec.kubernetes.manifests` is part of the Omni cluster template. `OmniHelmRelease` is separate from that template and reconciles a Helm release directly in the workload cluster using an explicit kubeconfig Secret.
+`OmniCluster.spec.kubernetes.manifests` is part of the Omni cluster template. `OmniHelmRelease` and `OmniSecretSync` are separate from that template and reconcile directly in the workload cluster using explicit kubeconfig Secrets.
 
 For GitOps:
 
 - Keep `OmniCluster.spec.kubernetes.manifests[].name` values unique for each cluster.
 - Put Talos settings required by workload components in `OmniCluster.spec.patches`.
 - Use `OmniHelmRelease` when Helm should own install, upgrade, status, and uninstall behavior.
+- Use `OmniSecretSync` when private registry credentials or other bootstrap Secrets must be copied into the workload cluster without committing Secret data to Git.
 - Order `OmniHelmRelease` after the workload-cluster kubeconfig Secret and any workload-cluster RBAC it needs.
+- Order `OmniSecretSync` after the workload-cluster kubeconfig Secret and the management-cluster source Secret.
 - Treat changes to networking, storage, or other bootstrap-critical components as staged migrations. Use `spec.suspend` while changing ownership or prerequisites.
 
 ## Kubeconfig exports in GitOps

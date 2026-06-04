@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -33,6 +34,8 @@ const (
 	validationClusterName           = "edge"
 	validationWorkersName           = "workers"
 	validationKubeconfigExportGroup = "cluster-automation"
+	validationKubeconfigSecretName  = "edge-automation-kubeconfig"
+	validationSecretSyncName        = "edge-ghcr"
 )
 
 func TestOmniClusterValidation(t *testing.T) {
@@ -285,6 +288,96 @@ func TestOmniKubeconfigExportValidation(t *testing.T) {
 	requireErrorContains(t, err, "deletionPolicy is required")
 }
 
+func TestOmniSecretSyncValidation(t *testing.T) {
+	t.Parallel()
+
+	validator := &OmniSecretSyncCustomValidator{}
+	item := validSecretSync()
+
+	warnings, err := validator.ValidateCreate(context.Background(), item)
+	if err != nil {
+		t.Fatalf("ValidateCreate() error = %v, want nil", err)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "writes Secret data directly") {
+		t.Fatalf("warnings = %#v, want direct Secret write warning", warnings)
+	}
+
+	for _, tt := range []struct {
+		name      string
+		mutate    func(*omniv1alpha1.OmniSecretSync)
+		wantError string
+	}{
+		{
+			name: "missing cluster ref",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.ClusterRef.Name = ""
+			},
+			wantError: "clusterRef.name is required",
+		},
+		{
+			name: "missing kubeconfig secret",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.KubeconfigSecretRef.Name = ""
+			},
+			wantError: "kubeconfig Secret name is required",
+		},
+		{
+			name: "blank kubeconfig key",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.KubeconfigSecretRef.Key = " "
+			},
+			wantError: "kubeconfig Secret key must not be blank",
+		},
+		{
+			name: "missing source secret",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.SourceSecretRef.Name = ""
+			},
+			wantError: "source Secret name is required",
+		},
+		{
+			name: "missing target secret",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.TargetSecretRef.Name = ""
+			},
+			wantError: "target Secret name is required",
+		},
+		{
+			name: "missing target namespace",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.TargetSecretRef.Namespace = ""
+			},
+			wantError: "target Secret namespace is required",
+		},
+		{
+			name: "blank type",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.Type = " "
+			},
+			wantError: "type must not be blank",
+		},
+		{
+			name: "unsupported deletion policy",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.DeletionPolicy = "Retain"
+			},
+			wantError: "Unsupported value: \"Retain\"",
+		},
+		{
+			name: "missing deletion policy",
+			mutate: func(item *omniv1alpha1.OmniSecretSync) {
+				item.Spec.DeletionPolicy = ""
+			},
+			wantError: "deletionPolicy is required",
+		},
+	} {
+		item = validSecretSync()
+		tt.mutate(item)
+		_, err = validator.ValidateCreate(context.Background(), item)
+		requireErrorContains(t, err, tt.wantError)
+	}
+}
+
 func validCluster() *omniv1alpha1.OmniCluster {
 	return &omniv1alpha1.OmniCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: validationClusterName},
@@ -308,11 +401,11 @@ func validCluster() *omniv1alpha1.OmniCluster {
 
 func validKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
 	return &omniv1alpha1.OmniKubeconfigExport{
-		ObjectMeta: metav1.ObjectMeta{Name: "edge-automation-kubeconfig"},
+		ObjectMeta: metav1.ObjectMeta{Name: validationKubeconfigSecretName},
 		Spec: omniv1alpha1.OmniKubeconfigExportSpec{
 			ClusterRef: omniv1alpha1.OmniClusterRef{Name: validationClusterName},
 			TargetSecretRef: omniv1alpha1.KubeconfigTargetSecretRef{
-				Name: "edge-automation-kubeconfig",
+				Name: validationKubeconfigSecretName,
 			},
 			ServiceAccount: omniv1alpha1.KubeconfigServiceAccountSpec{
 				User:   "edge-automation",
@@ -321,6 +414,28 @@ func validKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
 			TTL:            metav1.Duration{Duration: 24 * time.Hour},
 			RenewBefore:    &metav1.Duration{Duration: 4 * time.Hour},
 			DeletionPolicy: omniv1alpha1.KubeconfigExportDeletionPolicyDelete,
+		},
+	}
+}
+
+func validSecretSync() *omniv1alpha1.OmniSecretSync {
+	return &omniv1alpha1.OmniSecretSync{
+		ObjectMeta: metav1.ObjectMeta{Name: validationSecretSyncName},
+		Spec: omniv1alpha1.OmniSecretSyncSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: validationClusterName},
+			KubeconfigSecretRef: omniv1alpha1.SecretSyncKubeconfigSecretRef{
+				Name: validationKubeconfigSecretName,
+			},
+			SourceSecretRef: omniv1alpha1.SecretSyncSourceSecretRef{
+				Name: validationSecretSyncName,
+			},
+			TargetSecretRef: omniv1alpha1.SecretSyncTargetSecretRef{
+				Name:      validationSecretSyncName,
+				Namespace: "flux-system",
+			},
+			Type:            corev1.SecretTypeDockerConfigJson,
+			CreateNamespace: true,
+			DeletionPolicy:  omniv1alpha1.SecretSyncDeletionPolicyDelete,
 		},
 	}
 }

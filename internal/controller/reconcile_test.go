@@ -41,6 +41,7 @@ import (
 	"github.com/texas-hpc/omni-cluster-operator/internal/helmrelease"
 	"github.com/texas-hpc/omni-cluster-operator/internal/kubeconfigexport"
 	"github.com/texas-hpc/omni-cluster-operator/internal/omniapi"
+	"github.com/texas-hpc/omni-cluster-operator/internal/secretsync"
 )
 
 const (
@@ -56,6 +57,9 @@ const (
 	testHelmReleaseName  = "metrics-server"
 	testHelmNamespace    = "kube-system"
 	testHelmChartVersion = "3.13.0"
+	testSecretSyncName   = "edge-ghcr"
+	testSecretNamespace  = "flux-system"
+	testMissingCluster   = "missing cluster"
 )
 
 type fakeOmni struct {
@@ -85,6 +89,19 @@ type fakeHelmReleaseClient struct {
 	uninstallErr     error
 	uninstallCalls   int
 	uninstallConfigs [][]byte
+}
+
+type fakeSecretSyncClient struct {
+	syncResult  *secretsync.Result
+	syncErr     error
+	syncCalls   int
+	syncConfigs [][]byte
+	syncSource  *corev1.Secret
+	syncCluster string
+
+	deleteErr     error
+	deleteCalls   []secretsync.Target
+	deleteConfigs [][]byte
 }
 
 func (f *fakeHelmReleaseClient) Reconcile(_ context.Context, _ *omniv1alpha1.OmniHelmRelease, kubeconfig []byte) (*helmrelease.Result, error) {
@@ -121,6 +138,34 @@ func (f *fakeHelmReleaseClient) Uninstall(_ context.Context, _ *omniv1alpha1.Omn
 	}
 
 	return f.uninstallResult, f.uninstallErr
+}
+
+func (f *fakeSecretSyncClient) Sync(_ context.Context, item *omniv1alpha1.OmniSecretSync, source *corev1.Secret, kubeconfig []byte, clusterName string) (*secretsync.Result, error) {
+	f.syncCalls++
+	f.syncConfigs = append(f.syncConfigs, append([]byte(nil), kubeconfig...))
+	f.syncSource = source.DeepCopy()
+	f.syncCluster = clusterName
+	if f.syncResult == nil {
+		desired := secretsync.DesiredSecret(item, source, clusterName)
+		hash, err := secretsync.Hash(desired.Type, desired.Data)
+		if err != nil {
+			return nil, err
+		}
+		f.syncResult = &secretsync.Result{
+			Target: secretsync.TargetForItem(item),
+			Type:   desired.Type,
+			Hash:   hash,
+		}
+	}
+
+	return f.syncResult, f.syncErr
+}
+
+func (f *fakeSecretSyncClient) Delete(_ context.Context, _ *omniv1alpha1.OmniSecretSync, kubeconfig []byte, target secretsync.Target) error {
+	f.deleteCalls = append(f.deleteCalls, target)
+	f.deleteConfigs = append(f.deleteConfigs, append([]byte(nil), kubeconfig...))
+
+	return f.deleteErr
 }
 
 func (f *fakeOmni) Ping(_ context.Context, connection *omniv1alpha1.OmniConnection) (string, error) {
@@ -1003,7 +1048,7 @@ func TestOmniHelmReleaseWaitsForClusterAndCredentials(t *testing.T) {
 		wantReason string
 	}{
 		{
-			name:       "missing cluster",
+			name:       testMissingCluster,
 			objects:    nil,
 			wantReason: omniv1alpha1.ReasonMissingCluster,
 		},
@@ -1135,6 +1180,212 @@ func TestOmniHelmReleaseDeleteCanOrphanRelease(t *testing.T) {
 	}
 	if len(updated.Finalizers) != 0 {
 		t.Fatalf("finalizers = %#v, want empty", updated.Finalizers)
+	}
+}
+
+func TestOmniSecretSyncCopiesSourceSecret(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	item := testSecretSync()
+	source := testSecretSyncSourceSecret(item)
+	kubeconfigSecret := testSecretSyncKubeconfigSecret(item, testKubeconfigBytes("sync-token"))
+	secretSync := &fakeSecretSyncClient{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniSecretSync{}).
+		WithObjects(testCluster(), item, source, kubeconfigSecret).
+		Build()
+	reconciler := &OmniSecretSyncReconciler{Client: k8sClient, SecretSync: secretSync}
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
+
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if secretSync.syncCalls != 0 {
+		t.Fatalf("syncCalls after finalizer = %d, want 0", secretSync.syncCalls)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+	if secretSync.syncCalls != 1 {
+		t.Fatalf("syncCalls = %d, want 1", secretSync.syncCalls)
+	}
+	if got := string(secretSync.syncConfigs[0]); !strings.Contains(got, "sync-token") {
+		t.Fatalf("kubeconfig passed to SecretSync missing token: %s", got)
+	}
+	if secretSync.syncCluster != testClusterName {
+		t.Fatalf("syncCluster = %q, want %q", secretSync.syncCluster, testClusterName)
+	}
+	if string(secretSync.syncSource.Data[".dockerconfigjson"]) != `{"auths":{"ghcr.io":{}}}` {
+		t.Fatalf("syncSource data = %#v", secretSync.syncSource.Data)
+	}
+
+	updated := &omniv1alpha1.OmniSecretSync{}
+	if err := k8sClient.Get(ctx, request.NamespacedName, updated); err != nil {
+		t.Fatalf("get secret sync: %v", err)
+	}
+	if updated.Status.TargetSecretRef != item.Spec.TargetSecretRef.Name {
+		t.Fatalf("TargetSecretRef = %q, want %q", updated.Status.TargetSecretRef, item.Spec.TargetSecretRef.Name)
+	}
+	if updated.Status.TargetNamespace != testSecretNamespace {
+		t.Fatalf("TargetNamespace = %q, want %q", updated.Status.TargetNamespace, testSecretNamespace)
+	}
+	if updated.Status.SecretType != string(corev1.SecretTypeDockerConfigJson) {
+		t.Fatalf("SecretType = %q, want %q", updated.Status.SecretType, corev1.SecretTypeDockerConfigJson)
+	}
+	if updated.Status.SecretHash == "" {
+		t.Fatal("SecretHash is empty")
+	}
+	if updated.Status.LastSyncTime == nil {
+		t.Fatal("LastSyncTime is nil")
+	}
+	if updated.Status.LastError != "" {
+		t.Fatalf("LastError = %q, want empty", updated.Status.LastError)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionAccepted); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Accepted condition = %#v, want True", got)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionSynced); got == nil || got.Status != metav1.ConditionTrue || got.Reason != omniv1alpha1.ReasonSynced {
+		t.Fatalf("Synced condition = %#v, want True/%s", got, omniv1alpha1.ReasonSynced)
+	}
+	if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionTrue {
+		t.Fatalf("Ready condition = %#v, want True", got)
+	}
+}
+
+func TestOmniSecretSyncWaitsForDependencies(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name       string
+		objects    []client.Object
+		wantReason string
+	}{
+		{
+			name:       testMissingCluster,
+			objects:    nil,
+			wantReason: omniv1alpha1.ReasonMissingCluster,
+		},
+		{
+			name:       "missing source secret",
+			objects:    []client.Object{testCluster(), testSecretSyncKubeconfigSecret(testSecretSync(), testKubeconfigBytes("sync-token"))},
+			wantReason: omniv1alpha1.ReasonMissingSecret,
+		},
+		{
+			name: "missing kubeconfig secret",
+			objects: []client.Object{
+				testCluster(),
+				testSecretSyncSourceSecret(testSecretSync()),
+			},
+			wantReason: omniv1alpha1.ReasonMissingSecret,
+		},
+		{
+			name: "missing kubeconfig key",
+			objects: []client.Object{
+				testCluster(),
+				testSecretSyncSourceSecret(testSecretSync()),
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: "edge-secret-sync-kubeconfig", Namespace: testNamespace},
+					Data:       map[string][]byte{"other": testKubeconfigBytes("sync-token")},
+				},
+			},
+			wantReason: omniv1alpha1.ReasonMissingSecret,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			item := testSecretSync()
+			item.Finalizers = []string{omniv1alpha1.Finalizer}
+			objects := append([]client.Object{item}, tt.objects...)
+			secretSync := &fakeSecretSyncClient{}
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniSecretSync{}).
+				WithObjects(objects...).
+				Build()
+			reconciler := &OmniSecretSyncReconciler{Client: k8sClient, SecretSync: secretSync}
+
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if result.RequeueAfter != secretSyncRetryInterval {
+				t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, secretSyncRetryInterval)
+			}
+			if secretSync.syncCalls != 0 {
+				t.Fatalf("syncCalls = %d, want 0", secretSync.syncCalls)
+			}
+
+			updated := &omniv1alpha1.OmniSecretSync{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, updated); err != nil {
+				t.Fatalf("get secret sync: %v", err)
+			}
+			if got := meta.FindStatusCondition(updated.Status.Conditions, omniv1alpha1.ConditionReady); got == nil || got.Status != metav1.ConditionFalse || got.Reason != tt.wantReason {
+				t.Fatalf("Ready condition = %#v, want False/%s", got, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestOmniSecretSyncDeletionPolicy(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name        string
+		policy      omniv1alpha1.SecretSyncDeletionPolicy
+		wantDeletes int
+	}{
+		{name: "delete", policy: omniv1alpha1.SecretSyncDeletionPolicyDelete, wantDeletes: 1},
+		{name: "orphan", policy: omniv1alpha1.SecretSyncDeletionPolicyOrphan, wantDeletes: 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			scheme := testScheme(t)
+			deletionTime := metav1.Now()
+			item := testSecretSync()
+			item.Finalizers = []string{omniv1alpha1.Finalizer}
+			item.DeletionTimestamp = &deletionTime
+			item.Spec.DeletionPolicy = tt.policy
+			item.Status.TargetSecretRef = item.Spec.TargetSecretRef.Name
+			item.Status.TargetNamespace = item.Spec.TargetSecretRef.Namespace
+			kubeconfigSecret := testSecretSyncKubeconfigSecret(item, testKubeconfigBytes("sync-token"))
+			secretSync := &fakeSecretSyncClient{}
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&omniv1alpha1.OmniSecretSync{}).
+				WithObjects(item, kubeconfigSecret).
+				Build()
+			reconciler := &OmniSecretSyncReconciler{Client: k8sClient, SecretSync: secretSync}
+
+			if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if len(secretSync.deleteCalls) != tt.wantDeletes {
+				t.Fatalf("deleteCalls = %d, want %d", len(secretSync.deleteCalls), tt.wantDeletes)
+			}
+			if tt.wantDeletes == 1 && secretSync.deleteCalls[0] != secretsync.TargetForItem(item) {
+				t.Fatalf("delete target = %#v, want %#v", secretSync.deleteCalls[0], secretsync.TargetForItem(item))
+			}
+
+			updated := &omniv1alpha1.OmniSecretSync{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, updated)
+			if apierrors.IsNotFound(err) {
+				return
+			}
+			if err != nil {
+				t.Fatalf("get secret sync: %v", err)
+			}
+			if len(updated.Finalizers) != 0 {
+				t.Fatalf("finalizers = %#v, want empty", updated.Finalizers)
+			}
+		})
 	}
 }
 
@@ -1351,7 +1602,7 @@ func TestOmniKubeconfigExportReportsMissingDependencies(t *testing.T) {
 		wantReason string
 	}{
 		{
-			name:       "missing cluster",
+			name:       testMissingCluster,
 			objects:    []client.Object{testConnection()},
 			wantReason: omniv1alpha1.ReasonMissingCluster,
 		},
@@ -1745,6 +1996,40 @@ func TestKubeconfigExportWatchRequestMapping(t *testing.T) {
 	}
 }
 
+func TestSecretSyncWatchRequestMapping(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	item := testSecretSync()
+	other := testSecretSync()
+	other.Name = "other-secret-sync"
+	other.Spec.ClusterRef.Name = testOtherClusterName
+	other.Spec.SourceSecretRef.Name = "other-ghcr"
+	other.Spec.KubeconfigSecretRef.Name = "other-kubeconfig"
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(item, other).
+		Build()
+
+	clusterRequests := secretSyncRequestsForCluster(ctx, k8sClient, testCluster())
+	if len(clusterRequests) != 1 || clusterRequests[0].Name != item.Name {
+		t.Fatalf("secretSyncRequestsForCluster() = %#v, want %q", clusterRequests, item.Name)
+	}
+
+	sourceSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: item.Spec.SourceSecretRef.Name, Namespace: item.Namespace}}
+	sourceRequests := secretSyncRequestsForSecret(ctx, k8sClient, sourceSecret)
+	if len(sourceRequests) != 1 || sourceRequests[0].Name != item.Name {
+		t.Fatalf("secretSyncRequestsForSecret(source) = %#v, want %q", sourceRequests, item.Name)
+	}
+
+	kubeconfigSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: item.Spec.KubeconfigSecretRef.Name, Namespace: item.Namespace}}
+	kubeconfigRequests := secretSyncRequestsForSecret(ctx, k8sClient, kubeconfigSecret)
+	if len(kubeconfigRequests) != 1 || kubeconfigRequests[0].Name != item.Name {
+		t.Fatalf("secretSyncRequestsForSecret(kubeconfig) = %#v, want %q", kubeconfigRequests, item.Name)
+	}
+}
+
 type k8sObject interface {
 	client.Object
 }
@@ -1908,6 +2193,32 @@ func testKubeconfigExport() *omniv1alpha1.OmniKubeconfigExport {
 	}
 }
 
+func testSecretSync() *omniv1alpha1.OmniSecretSync {
+	return &omniv1alpha1.OmniSecretSync{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testSecretSyncName,
+			Namespace: testNamespace,
+			UID:       "22222222-2222-4222-8222-222222222222",
+		},
+		Spec: omniv1alpha1.OmniSecretSyncSpec{
+			ClusterRef: omniv1alpha1.OmniClusterRef{Name: testClusterName},
+			KubeconfigSecretRef: omniv1alpha1.SecretSyncKubeconfigSecretRef{
+				Name: "edge-secret-sync-kubeconfig",
+			},
+			SourceSecretRef: omniv1alpha1.SecretSyncSourceSecretRef{
+				Name: testSecretSyncName,
+			},
+			TargetSecretRef: omniv1alpha1.SecretSyncTargetSecretRef{
+				Name:      testSecretSyncName,
+				Namespace: testSecretNamespace,
+			},
+			Type:            corev1.SecretTypeDockerConfigJson,
+			CreateNamespace: true,
+			DeletionPolicy:  omniv1alpha1.SecretSyncDeletionPolicyDelete,
+		},
+	}
+}
+
 func testKubeconfigBytes(token string) []byte {
 	return fmt.Appendf(nil, `apiVersion: v1
 kind: Config
@@ -1956,6 +2267,26 @@ func testHelmReleaseKubeconfigSecret(item *omniv1alpha1.OmniHelmRelease, data []
 		Type:       corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			helmrelease.KubeconfigSecretKey(item): data,
+		},
+	}
+}
+
+func testSecretSyncSourceSecret(item *omniv1alpha1.OmniSecretSync) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: item.Spec.SourceSecretRef.Name, Namespace: item.Namespace},
+		Type:       corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			".dockerconfigjson": []byte(`{"auths":{"ghcr.io":{}}}`),
+		},
+	}
+}
+
+func testSecretSyncKubeconfigSecret(item *omniv1alpha1.OmniSecretSync, data []byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: item.Spec.KubeconfigSecretRef.Name, Namespace: item.Namespace},
+		Type:       corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			secretsync.KubeconfigSecretKey(item): data,
 		},
 	}
 }

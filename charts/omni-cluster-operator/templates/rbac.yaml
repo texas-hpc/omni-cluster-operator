@@ -68,6 +68,7 @@ rules:
       - omnihelmreleases
       - omnikubeconfigexports
       - omnimachines
+      - omnisecretsyncs
       - omniworkers
     verbs:
       - create
@@ -86,6 +87,7 @@ rules:
       - omnihelmreleases/finalizers
       - omnikubeconfigexports/finalizers
       - omnimachines/finalizers
+      - omnisecretsyncs/finalizers
       - omniworkers/finalizers
     verbs:
       - update
@@ -98,6 +100,7 @@ rules:
       - omnihelmreleases/status
       - omnikubeconfigexports/status
       - omnimachines/status
+      - omnisecretsyncs/status
       - omniworkers/status
     verbs:
       - get

@@ -6,6 +6,7 @@
   (dict "resource" "omnihelmreleases" "name" "omnihelmrelease")
   (dict "resource" "omnikubeconfigexports" "name" "omnikubeconfigexport")
   (dict "resource" "omnimachines" "name" "omnimachine")
+  (dict "resource" "omnisecretsyncs" "name" "omnisecretsync")
   (dict "resource" "omniworkers" "name" "omniworkers")
 }}
 {{- range $entry := $resources }}

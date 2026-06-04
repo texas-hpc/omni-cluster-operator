@@ -14,6 +14,7 @@ Use it when you want:
 - Separate Kubernetes resources for cluster settings, control plane, workers, and static machines.
 - Opt-in workload-cluster kubeconfig Secret exports for scoped automation.
 - Opt-in direct Helm releases for add-ons that need Helm release state in the workload cluster.
+- Opt-in workload-cluster Secret syncs for private bootstrap data that should not live in Git.
 - Finalizer-based remote cleanup, with an orphan mode when you want to keep the Omni cluster after deleting Kubernetes resources.
 
 ## Which operator should I use?
@@ -46,7 +47,9 @@ flowchart LR
   Workers["OmniWorkers"] --> Cluster
   Machine["OmniMachine"] --> Cluster
   Export["OmniKubeconfigExport"] --> HelmRelease["OmniHelmRelease"]
+  Export --> SecretSync["OmniSecretSync"]
   HelmRelease --> Cluster
+  SecretSync --> Cluster
   Export --> Cluster
   Cluster --> Omni["Sidero Omni"]
 ```

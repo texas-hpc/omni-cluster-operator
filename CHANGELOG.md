@@ -14,6 +14,8 @@ entries under the released version heading.
 
 ### Added
 
+- Added `OmniSecretSync` for copying selected management-cluster Secrets into
+  workload clusters using explicit workload-cluster kubeconfig Secrets.
 - Added `OmniKubeconfigExport` for explicit, rotating workload-cluster
   service-account kubeconfig Secret exports.
 - Added `OmniHelmRelease` for opt-in direct Helm release reconciliation against
