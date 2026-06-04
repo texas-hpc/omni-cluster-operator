@@ -134,6 +134,28 @@ The target Secret is created in the same namespace as the export. The default da
 
 Changing the service-account user, groups, TTL, target key, or remote cluster name changes the export spec hash and causes a new kubeconfig request. `renewBefore`, target Secret name, and deletion policy affect rotation or cleanup behavior but do not change the generated kubeconfig identity.
 
+## OmniSecretSync
+
+Copies a management-cluster Secret into an Omni-created workload cluster using an explicit workload-cluster kubeconfig Secret.
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `spec.clusterRef.name` | Yes | `OmniCluster` in the same namespace. Used for attachment/status; it does not export credentials. |
+| `spec.kubeconfigSecretRef.name` | Yes | Secret in the same namespace containing workload-cluster kubeconfig data. |
+| `spec.kubeconfigSecretRef.key` | No | Secret data key. Defaults to `kubeconfig`. |
+| `spec.sourceSecretRef.name` | Yes | Source Secret in the same namespace as the `OmniSecretSync`. |
+| `spec.targetSecretRef.name` | Yes | Target Secret name in the workload cluster. |
+| `spec.targetSecretRef.namespace` | Yes | Target Secret namespace in the workload cluster. |
+| `spec.type` | No | Target Secret type override. Defaults to the source Secret type. |
+| `spec.labels` | No | Extra labels to write on the workload-cluster target Secret. |
+| `spec.annotations` | No | Extra annotations to write on the workload-cluster target Secret. |
+| `spec.createNamespace` | No | Create the workload-cluster target namespace if missing. |
+| `spec.deletionPolicy` | Yes | `Delete` removes the target Secret on deletion; `Orphan` leaves it behind. |
+
+Status includes `Ready`, `Accepted`, `Synced`, source Secret name, target Secret name/namespace, target Secret type, synced content hash, last attempt time, last sync time, last error, and observed generation.
+
+`OmniSecretSync` copies `data` and Secret type only. It does not copy management-cluster owner references, resource versions, labels, or annotations from the source Secret. The target Secret receives operator ownership labels/annotations plus any `spec.labels` and `spec.annotations`.
+
 ## Common nested fields
 
 ### Patches

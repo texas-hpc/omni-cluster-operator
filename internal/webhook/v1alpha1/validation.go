@@ -150,7 +150,14 @@ func validateKubeconfigExport(item *omniv1alpha1.OmniKubeconfigExport) field.Err
 	case "":
 		allErrs = append(allErrs, field.Required(specPath.Child("deletionPolicy"), "deletionPolicy is required"))
 	default:
-		allErrs = append(allErrs, field.NotSupported(specPath.Child("deletionPolicy"), item.Spec.DeletionPolicy, []string{"Delete", "Orphan"}))
+		allErrs = append(allErrs, field.NotSupported(
+			specPath.Child("deletionPolicy"),
+			item.Spec.DeletionPolicy,
+			[]string{
+				string(omniv1alpha1.KubeconfigExportDeletionPolicyDelete),
+				string(omniv1alpha1.KubeconfigExportDeletionPolicyOrphan),
+			},
+		))
 	}
 
 	return allErrs
@@ -196,10 +203,60 @@ func validateHelmRelease(item *omniv1alpha1.OmniHelmRelease) field.ErrorList {
 	switch helmrelease.DeletionPolicy(item) {
 	case omniv1alpha1.HelmReleaseDeletionPolicyUninstall, omniv1alpha1.HelmReleaseDeletionPolicyOrphan:
 	default:
-		allErrs = append(allErrs, field.NotSupported(specPath.Child("deletionPolicy"), item.Spec.DeletionPolicy, []string{"Uninstall", "Orphan"}))
+		allErrs = append(allErrs, field.NotSupported(
+			specPath.Child("deletionPolicy"),
+			item.Spec.DeletionPolicy,
+			[]string{
+				string(omniv1alpha1.HelmReleaseDeletionPolicyUninstall),
+				string(omniv1alpha1.HelmReleaseDeletionPolicyOrphan),
+			},
+		))
 	}
 	if _, err := helmrelease.Values(item); err != nil {
 		allErrs = append(allErrs, field.Invalid(chartPath.Child("values"), item.Spec.Chart.Values, err.Error()))
+	}
+
+	return allErrs
+}
+
+func validateSecretSync(item *omniv1alpha1.OmniSecretSync) field.ErrorList {
+	specPath := field.NewPath("spec")
+	var allErrs field.ErrorList
+
+	if strings.TrimSpace(item.Spec.ClusterRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("clusterRef", "name"), "clusterRef.name is required"))
+	}
+	if strings.TrimSpace(item.Spec.KubeconfigSecretRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("kubeconfigSecretRef", "name"), "kubeconfig Secret name is required"))
+	}
+	if item.Spec.KubeconfigSecretRef.Key != "" && strings.TrimSpace(item.Spec.KubeconfigSecretRef.Key) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("kubeconfigSecretRef", "key"), "kubeconfig Secret key must not be blank"))
+	}
+	if strings.TrimSpace(item.Spec.SourceSecretRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("sourceSecretRef", "name"), "source Secret name is required"))
+	}
+	if strings.TrimSpace(item.Spec.TargetSecretRef.Name) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("targetSecretRef", "name"), "target Secret name is required"))
+	}
+	if strings.TrimSpace(item.Spec.TargetSecretRef.Namespace) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("targetSecretRef", "namespace"), "target Secret namespace is required"))
+	}
+	if item.Spec.Type != "" && strings.TrimSpace(string(item.Spec.Type)) == "" {
+		allErrs = append(allErrs, field.Invalid(specPath.Child("type"), item.Spec.Type, "type must not be blank"))
+	}
+	switch item.Spec.DeletionPolicy {
+	case omniv1alpha1.SecretSyncDeletionPolicyDelete, omniv1alpha1.SecretSyncDeletionPolicyOrphan:
+	case "":
+		allErrs = append(allErrs, field.Required(specPath.Child("deletionPolicy"), "deletionPolicy is required"))
+	default:
+		allErrs = append(allErrs, field.NotSupported(
+			specPath.Child("deletionPolicy"),
+			item.Spec.DeletionPolicy,
+			[]string{
+				string(omniv1alpha1.SecretSyncDeletionPolicyDelete),
+				string(omniv1alpha1.SecretSyncDeletionPolicyOrphan),
+			},
+		))
 	}
 
 	return allErrs
@@ -211,6 +268,14 @@ func helmReleaseWarnings(item *omniv1alpha1.OmniHelmRelease) []string {
 	}
 
 	return []string{"OmniHelmRelease uses a workload-cluster kubeconfig Secret and writes directly to that cluster"}
+}
+
+func secretSyncWarnings(item *omniv1alpha1.OmniSecretSync) []string {
+	if item.Spec.KubeconfigSecretRef.Name == "" {
+		return nil
+	}
+
+	return []string{"OmniSecretSync uses a workload-cluster kubeconfig Secret and writes Secret data directly to that cluster"}
 }
 
 func kubeconfigExportWarnings(item *omniv1alpha1.OmniKubeconfigExport) []string {

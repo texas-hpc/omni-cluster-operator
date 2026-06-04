@@ -243,6 +243,13 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "omnihelmrelease")
 		os.Exit(1)
 	}
+	if err := (&controller.OmniSecretSyncReconciler{
+		Client:       mgr.GetClient(),
+		SecretReader: mgr.GetAPIReader(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "omnisecretsync")
+		os.Exit(1)
+	}
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		webhooks := []struct {
 			name  string
@@ -254,6 +261,7 @@ func main() {
 			{name: "OmniHelmRelease", setup: webhookv1alpha1.SetupOmniHelmReleaseWebhookWithManager},
 			{name: "OmniKubeconfigExport", setup: webhookv1alpha1.SetupOmniKubeconfigExportWebhookWithManager},
 			{name: "OmniMachine", setup: webhookv1alpha1.SetupOmniMachineWebhookWithManager},
+			{name: "OmniSecretSync", setup: webhookv1alpha1.SetupOmniSecretSyncWebhookWithManager},
 			{name: "OmniWorkers", setup: webhookv1alpha1.SetupOmniWorkersWebhookWithManager},
 		}
 

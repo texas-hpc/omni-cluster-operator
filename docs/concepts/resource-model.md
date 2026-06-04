@@ -13,6 +13,7 @@ The API group is `omni.texashpc.com/v1alpha1`.
 | `OmniMachine` | Defines optional per-machine template settings for static machines. |
 | `OmniHelmRelease` | Reconciles a Helm release directly in a workload cluster using an explicit kubeconfig Secret. |
 | `OmniKubeconfigExport` | Explicitly exports and rotates a workload-cluster service-account kubeconfig Secret. |
+| `OmniSecretSync` | Copies a management-cluster Secret into a workload cluster using an explicit kubeconfig Secret. |
 
 ## Namespace ownership
 
@@ -27,6 +28,7 @@ Keep these objects in the release namespace:
 - `OmniMachine`
 - `OmniHelmRelease`
 - `OmniKubeconfigExport`
+- `OmniSecretSync`
 - The Secret referenced by `OmniConnection.spec.auth.serviceAccountSecretRef`
 
 ## References
@@ -38,6 +40,8 @@ Child resources do not select an `OmniConnection` directly. This keeps all templ
 `OmniKubeconfigExport.spec.clusterRef.name` also points at an `OmniCluster`, but it is not part of the rendered Omni cluster template. It reads the parent cluster's `OmniConnection`, requests an explicit service-account kubeconfig from Omni, and writes only the requested target Secret. Use it for management-cluster automation that needs workload-cluster access; use Omni UI or `omnictl` for human kubeconfig and talosconfig downloads.
 
 `OmniHelmRelease.spec.clusterRef.name` points at the parent `OmniCluster` for attachment and status, but Helm reconciliation uses the explicitly named `spec.kubeconfigSecretRef`. The operator does not export workload-cluster credentials implicitly.
+
+`OmniSecretSync.spec.clusterRef.name` follows the same attachment model. It reads a management-cluster source Secret from the operator namespace and uses `spec.kubeconfigSecretRef` to write a target Secret directly into the workload cluster.
 
 ## Remote ownership
 

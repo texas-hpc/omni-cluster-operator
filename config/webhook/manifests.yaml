@@ -130,6 +130,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-omni-texashpc-com-v1alpha1-omnisecretsync
+  failurePolicy: Fail
+  name: vomnisecretsync-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - omni.texashpc.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - omnisecretsyncs
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-omni-texashpc-com-v1alpha1-omniworkers
   failurePolicy: Fail
   name: vomniworkers-v1alpha1.kb.io

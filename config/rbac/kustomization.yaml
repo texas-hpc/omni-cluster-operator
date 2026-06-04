@@ -25,6 +25,9 @@ resources:
 - omnihelmrelease_admin_role.yaml
 - omnihelmrelease_editor_role.yaml
 - omnihelmrelease_viewer_role.yaml
+- omnisecretsync_admin_role.yaml
+- omnisecretsync_editor_role.yaml
+- omnisecretsync_viewer_role.yaml
 - omniworkers_admin_role.yaml
 - omniworkers_editor_role.yaml
 - omniworkers_viewer_role.yaml

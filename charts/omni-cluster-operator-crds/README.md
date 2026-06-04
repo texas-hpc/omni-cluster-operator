@@ -40,6 +40,7 @@ The chart installs CRDs in the `omni.texashpc.com` API group:
 | `OmniWorkers` | Defines worker machine group configuration for an Omni cluster. |
 | `OmniHelmRelease` | Reconciles Helm releases directly in workload clusters using explicit kubeconfig Secrets. |
 | `OmniKubeconfigExport` | Exports a scoped workload-cluster kubeconfig Secret on request. |
+| `OmniSecretSync` | Copies a management-cluster Secret into a workload cluster using explicit kubeconfig Secrets. |
 
 ## Values
 
