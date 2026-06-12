@@ -5,7 +5,7 @@ go 1.26.3
 require (
 	github.com/cosi-project/runtime v1.16.1
 	github.com/google/uuid v1.6.0
-	github.com/onsi/ginkgo/v2 v2.29.0
+	github.com/onsi/ginkgo/v2 v2.30.0
 	github.com/onsi/gomega v1.41.0
 	github.com/siderolabs/omni/client v1.8.2
 	go.yaml.in/yaml/v4 v4.0.0-rc.4
