@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"helm.sh/helm/v4/pkg/action"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -105,6 +106,21 @@ func TestChartLocatorUsesFullOCIReference(t *testing.T) {
 	}
 }
 
+func TestActionConfigInitializesRegistryClient(t *testing.T) {
+	t.Parallel()
+
+	cfg, _, err := Client{CacheDir: t.TempDir()}.actionConfig(testRelease(), testKubeconfig())
+	if err != nil {
+		t.Fatalf("actionConfig() error = %v", err)
+	}
+	if cfg.RegistryClient == nil {
+		t.Fatal("actionConfig() RegistryClient = nil, want OCI registry client")
+	}
+	if got := action.NewInstall(cfg).GetRegistryClient(); got != cfg.RegistryClient {
+		t.Fatal("action.NewInstall() did not inherit registry client")
+	}
+}
+
 func testRelease() *omniv1alpha1.OmniHelmRelease {
 	return &omniv1alpha1.OmniHelmRelease{
 		ObjectMeta: metav1.ObjectMeta{Name: testReleaseName, Namespace: "default"},
@@ -123,4 +139,25 @@ func testRelease() *omniv1alpha1.OmniHelmRelease {
 			},
 		},
 	}
+}
+
+func testKubeconfig() []byte {
+	return []byte(`apiVersion: v1
+kind: Config
+clusters:
+- name: test
+  cluster:
+    server: https://127.0.0.1:6443
+    insecure-skip-tls-verify: true
+contexts:
+- name: test
+  context:
+    cluster: test
+    user: test
+current-context: test
+users:
+- name: test
+  user:
+    token: test-token
+`)
 }
