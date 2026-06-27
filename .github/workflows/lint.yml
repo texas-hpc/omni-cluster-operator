@@ -53,7 +53,11 @@ jobs:
             ${{ runner.os }}-${{ github.workflow }}-local-tools-
 
       - name: Check pushed commit message
-        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        if: >-
+          github.event_name == 'push' &&
+          github.event.before != '0000000000000000000000000000000000000000' &&
+          !startsWith(github.event.head_commit.message, 'Merge pull request #') &&
+          !contains(github.event.head_commit.message, '(#')
         env:
           COMMITLINT_FROM: ${{ github.event.before }}
           COMMITLINT_TO: ${{ github.sha }}
