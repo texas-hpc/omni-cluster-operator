@@ -156,16 +156,21 @@ func (c Client) actionConfig(item *omniv1alpha1.OmniHelmRelease, kubeconfig []by
 
 func (c Client) loadChart(ctx context.Context, item *omniv1alpha1.OmniHelmRelease, cfg *action.Configuration, settings *cli.EnvSettings) (any, error) {
 	client := action.NewInstall(cfg)
-	client.RepoURL = item.Spec.Chart.Repository
+	chartRef, repoURL := ChartLocator(item)
+	client.RepoURL = repoURL
 	client.Version = item.Spec.Chart.Version
 	client.ReleaseName = ReleaseName(item)
 	client.Namespace = Namespace(item)
 
 	locateChartMu.Lock()
-	chartPath, err := client.LocateChart(item.Spec.Chart.Chart, settings)
+	chartPath, err := client.LocateChart(chartRef, settings)
 	locateChartMu.Unlock()
 	if err != nil {
-		return nil, fmt.Errorf("locate Helm chart %s %s from %s: %w", item.Spec.Chart.Chart, item.Spec.Chart.Version, item.Spec.Chart.Repository, err)
+		if repoURL == "" {
+			return nil, fmt.Errorf("locate Helm chart %s %s: %w", chartRef, item.Spec.Chart.Version, err)
+		}
+
+		return nil, fmt.Errorf("locate Helm chart %s %s from %s: %w", chartRef, item.Spec.Chart.Version, repoURL, err)
 	}
 
 	select {

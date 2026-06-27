@@ -75,6 +75,36 @@ func TestValuesRequiresJSONObject(t *testing.T) {
 	}
 }
 
+func TestChartLocatorUsesRepositoryForNamedChart(t *testing.T) {
+	t.Parallel()
+
+	item := testRelease()
+
+	chart, repository := ChartLocator(item)
+	if chart != testReleaseName {
+		t.Fatalf("ChartLocator() chart = %q, want %q", chart, testReleaseName)
+	}
+	if repository != "https://charts.example.test/" {
+		t.Fatalf("ChartLocator() repository = %q", repository)
+	}
+}
+
+func TestChartLocatorUsesFullOCIReference(t *testing.T) {
+	t.Parallel()
+
+	item := testRelease()
+	item.Spec.Chart.Chart = "oci://ghcr.io/controlplaneio-fluxcd/charts/flux-operator"
+	item.Spec.Chart.Repository = "oci://ghcr.io/controlplaneio-fluxcd/charts/flux-operator"
+
+	chart, repository := ChartLocator(item)
+	if chart != item.Spec.Chart.Chart {
+		t.Fatalf("ChartLocator() chart = %q, want OCI reference", chart)
+	}
+	if repository != "" {
+		t.Fatalf("ChartLocator() repository = %q, want empty repository for OCI reference", repository)
+	}
+}
+
 func testRelease() *omniv1alpha1.OmniHelmRelease {
 	return &omniv1alpha1.OmniHelmRelease{
 		ObjectMeta: metav1.ObjectMeta{Name: testReleaseName, Namespace: "default"},

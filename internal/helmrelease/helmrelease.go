@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	omniv1alpha1 "github.com/texas-hpc/omni-cluster-operator/api/v1alpha1"
@@ -30,6 +31,7 @@ const (
 	DefaultKubeconfigKey  = "kubeconfig"
 	DefaultTimeout        = 5 * time.Minute
 	DefaultDeletionPolicy = omniv1alpha1.HelmReleaseDeletionPolicyUninstall
+	OCIChartPrefix        = "oci://"
 	ActionInstall         = "Install"
 	ActionUpgrade         = "Upgrade"
 	ActionUninstall       = "Uninstall"
@@ -47,6 +49,21 @@ type Result struct {
 	ChartVersion string
 	Revision     int
 	Status       string
+}
+
+// IsOCIChartReference reports whether chart is a full OCI chart reference.
+func IsOCIChartReference(chart string) bool {
+	return strings.HasPrefix(strings.TrimSpace(chart), OCIChartPrefix)
+}
+
+// ChartLocator returns the chart reference and repository URL passed to Helm.
+func ChartLocator(item *omniv1alpha1.OmniHelmRelease) (string, string) {
+	chart := item.Spec.Chart.Chart
+	if IsOCIChartReference(chart) {
+		return chart, ""
+	}
+
+	return chart, item.Spec.Chart.Repository
 }
 
 // ReleaseName returns the normalized Helm release name.
