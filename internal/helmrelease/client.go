@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/registry"
 	helmrelease "helm.sh/helm/v4/pkg/release"
 	"helm.sh/helm/v4/pkg/storage/driver"
 
@@ -150,6 +152,17 @@ func (c Client) actionConfig(item *omniv1alpha1.OmniHelmRelease, kubeconfig []by
 	if err := cfg.Init(getter, Namespace(item), "secrets"); err != nil {
 		return nil, nil, fmt.Errorf("initialize Helm action configuration: %w", err)
 	}
+
+	registryClient, err := registry.NewClient(
+		registry.ClientOptDebug(settings.Debug),
+		registry.ClientOptEnableCache(true),
+		registry.ClientOptWriter(io.Discard),
+		registry.ClientOptCredentialsFile(settings.RegistryConfig),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("initialize Helm registry client: %w", err)
+	}
+	cfg.RegistryClient = registryClient
 
 	return cfg, settings, nil
 }
