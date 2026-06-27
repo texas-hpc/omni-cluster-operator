@@ -98,6 +98,11 @@ spec:
       replicas: 2
 ```
 
+For OCI charts, set `spec.chart.chart` to the full `oci://` chart reference.
+The `spec.chart.repository` field is still required by the v1alpha1 schema, so
+set it to the same OCI reference; the controller ignores it for Helm lookup when
+`spec.chart.chart` starts with `oci://`.
+
 ## Migration from raw manifest sync
 
 Do not manage the same application through raw Omni manifest sync and `OmniHelmRelease` at the same time unless you have a deliberate handoff plan.

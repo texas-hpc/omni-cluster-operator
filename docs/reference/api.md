@@ -96,8 +96,8 @@ Reconciles a Helm release directly in an Omni-created workload cluster using an 
 | `spec.kubeconfigSecretRef.key` | No | Secret data key. Defaults to `kubeconfig`. |
 | `spec.releaseName` | No | Helm release name. Defaults to `metadata.name`. |
 | `spec.namespace` | No | Workload-cluster release namespace. Defaults to `default`. |
-| `spec.chart.repository` | Yes | Helm repository URL. |
-| `spec.chart.chart` | Yes | Helm chart name to install or upgrade. |
+| `spec.chart.repository` | Yes | Helm repository URL. For full OCI chart references in `spec.chart.chart`, this field remains required by the v1alpha1 schema but is ignored by Helm lookup. |
+| `spec.chart.chart` | Yes | Helm chart name to install or upgrade, or a full `oci://` chart reference. |
 | `spec.chart.version` | Yes | Helm chart version to install or upgrade. |
 | `spec.chart.values` | No | Helm values object passed to install and upgrade. |
 | `spec.createNamespace` | No | Ask Helm to create the release namespace during install. |
