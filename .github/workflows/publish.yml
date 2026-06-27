@@ -129,9 +129,25 @@ jobs:
         run: task chart-package
 
       - name: Push Helm charts to GHCR OCI registry
+        env:
+          CRD_CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator-crds
+          CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          helm push "dist/charts/omni-cluster-operator-crds-${{ steps.version.outputs.version }}.tgz" "${CHART_REGISTRY}"
-          helm push "dist/charts/omni-cluster-operator-${{ steps.version.outputs.version }}.tgz" "${CHART_REGISTRY}"
+          push_chart() {
+            local package_path="${1}"
+            local chart_repository="${2}"
+
+            if helm show chart "${chart_repository}" --version "${VERSION}" >/dev/null 2>&1; then
+              echo "${chart_repository}:${VERSION} already exists; skipping push."
+              return 0
+            fi
+
+            helm push "${package_path}" "${CHART_REGISTRY}"
+          }
+
+          push_chart "dist/charts/omni-cluster-operator-crds-${VERSION}.tgz" "${CRD_CHART_REPOSITORY}"
+          push_chart "dist/charts/omni-cluster-operator-${VERSION}.tgz" "${CHART_REPOSITORY}"
 
       - name: Push Artifact Hub metadata to GHCR OCI registry
         run: |
@@ -191,7 +207,27 @@ jobs:
             release_flags+=(--prerelease)
           fi
 
-          gh release create "${tag_name}" \
-            "dist/charts/omni-cluster-operator-crds-${VERSION}.tgz#omni-cluster-operator-crds-${VERSION}.tgz" \
-            "dist/charts/omni-cluster-operator-${VERSION}.tgz#omni-cluster-operator-${VERSION}.tgz" \
-            "${release_flags[@]}"
+          release_assets=(
+            "dist/charts/omni-cluster-operator-crds-${VERSION}.tgz#omni-cluster-operator-crds-${VERSION}.tgz"
+            "dist/charts/omni-cluster-operator-${VERSION}.tgz#omni-cluster-operator-${VERSION}.tgz"
+          )
+
+          for attempt in {1..5}; do
+            if gh release create "${tag_name}" "${release_assets[@]}" "${release_flags[@]}"; then
+              exit 0
+            fi
+
+            if gh release view "${tag_name}" >/dev/null 2>&1; then
+              echo "Release ${tag_name} exists after create returned an error; treating as complete."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -eq 5 ]]; then
+              echo "Failed to create release ${tag_name} after ${attempt} attempts."
+              exit 1
+            fi
+
+            sleep_seconds=$((attempt * 15))
+            echo "Release creation failed; retrying in ${sleep_seconds}s."
+            sleep "${sleep_seconds}"
+          done
