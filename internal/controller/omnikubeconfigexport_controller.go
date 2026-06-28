@@ -359,8 +359,16 @@ func (r *OmniKubeconfigExportReconciler) targetSecret(ctx context.Context, item 
 		secretReader = r.Client
 	}
 
+	// Prefer observed status fields for target Secret lookup to handle spec changes correctly
+	targetNamespace := kubeconfigexport.TargetSecretNamespace(item)
+	targetName := item.Spec.TargetSecretRef.Name
+	if item.Status.TargetSecretRef != "" && item.Status.TargetSecretNamespace != "" {
+		targetNamespace = item.Status.TargetSecretNamespace
+		targetName = item.Status.TargetSecretRef
+	}
+
 	secret := &corev1.Secret{}
-	err := secretReader.Get(ctx, client.ObjectKey{Namespace: kubeconfigexport.TargetSecretNamespace(item), Name: item.Spec.TargetSecretRef.Name}, secret)
+	err := secretReader.Get(ctx, client.ObjectKey{Namespace: targetNamespace, Name: targetName}, secret)
 	if err == nil {
 		return secret, true, nil
 	}
