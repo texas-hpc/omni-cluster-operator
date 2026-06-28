@@ -32,15 +32,16 @@ import (
 const (
 	DefaultSecretKey = "kubeconfig"
 
-	ManagedByLabel         = "app.kubernetes.io/managed-by"
-	OwnerUIDLabel          = "omni.texashpc.com/kubeconfig-export-uid"
-	ClusterLabel           = "omni.texashpc.com/cluster"
-	ManagedByValue         = "omni-cluster-operator"
-	OwnerAnnotation        = "omni.texashpc.com/kubeconfig-export-name"
-	HashAnnotation         = "omni.texashpc.com/kubeconfig-hash"
-	SpecHashAnnotation     = "omni.texashpc.com/kubeconfig-export-spec-hash"
-	ExpirationAnnotation   = "omni.texashpc.com/kubeconfig-expiration-time"
-	LastRotationAnnotation = "omni.texashpc.com/kubeconfig-last-rotation-time"
+	ManagedByLabel           = "app.kubernetes.io/managed-by"
+	OwnerUIDLabel            = "omni.texashpc.com/kubeconfig-export-uid"
+	ClusterLabel             = "omni.texashpc.com/cluster"
+	ManagedByValue           = "omni-cluster-operator"
+	OwnerAnnotation          = "omni.texashpc.com/kubeconfig-export-name"
+	OwnerNamespaceAnnotation = "omni.texashpc.com/kubeconfig-export-namespace"
+	HashAnnotation           = "omni.texashpc.com/kubeconfig-hash"
+	SpecHashAnnotation       = "omni.texashpc.com/kubeconfig-export-spec-hash"
+	ExpirationAnnotation     = "omni.texashpc.com/kubeconfig-expiration-time"
+	LastRotationAnnotation   = "omni.texashpc.com/kubeconfig-last-rotation-time"
 )
 
 const specHashVersion = "v1"
@@ -52,6 +53,15 @@ func TargetSecretKey(item *omniv1alpha1.OmniKubeconfigExport) string {
 	}
 
 	return DefaultSecretKey
+}
+
+// TargetSecretNamespace returns the normalized namespace for the target Secret.
+func TargetSecretNamespace(item *omniv1alpha1.OmniKubeconfigExport) string {
+	if item.Spec.TargetSecretRef.Namespace != "" {
+		return item.Spec.TargetSecretRef.Namespace
+	}
+
+	return item.Namespace
 }
 
 // Hash returns a SHA-256 hash for kubeconfig bytes.
@@ -99,11 +109,12 @@ func SecretLabels(item *omniv1alpha1.OmniKubeconfigExport, clusterName string) m
 // SecretAnnotations returns annotations that describe generated kubeconfig data.
 func SecretAnnotations(item *omniv1alpha1.OmniKubeconfigExport, specHash, kubeconfigHash string, expirationTime, lastRotationTime metav1.Time) map[string]string {
 	return map[string]string{
-		OwnerAnnotation:        item.Name,
-		SpecHashAnnotation:     specHash,
-		HashAnnotation:         kubeconfigHash,
-		ExpirationAnnotation:   expirationTime.UTC().Format(time.RFC3339),
-		LastRotationAnnotation: lastRotationTime.UTC().Format(time.RFC3339),
+		OwnerAnnotation:          item.Name,
+		OwnerNamespaceAnnotation: item.Namespace,
+		SpecHashAnnotation:       specHash,
+		HashAnnotation:           kubeconfigHash,
+		ExpirationAnnotation:     expirationTime.UTC().Format(time.RFC3339),
+		LastRotationAnnotation:   lastRotationTime.UTC().Format(time.RFC3339),
 	}
 }
 

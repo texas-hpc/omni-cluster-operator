@@ -1777,6 +1777,52 @@ func TestOmniKubeconfigExportCleansPreviousOwnedTargetSecret(t *testing.T) {
 	}
 }
 
+func TestOmniKubeconfigExportWritesTargetSecretNamespace(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	item.Spec.TargetSecretRef.Namespace = testSecretNamespace
+	item.Spec.TargetSecretRef.Key = "config"
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}, &omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}).
+		WithObjects(testConnection(), testCluster(), item).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client:       k8sClient,
+		SecretReader: k8sClient,
+		Omni:         &fakeOmni{kubeconfigData: testKubeconfigBytes("target-namespace-token")},
+		Clock:        func() time.Time { return now },
+	}
+
+	if _, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	secret := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testSecretNamespace, Name: item.Spec.TargetSecretRef.Name}, secret); err != nil {
+		t.Fatalf("get target Secret: %v", err)
+	}
+	if string(secret.Data["config"]) != string(testKubeconfigBytes("target-namespace-token")) {
+		t.Fatal("target Secret does not contain generated kubeconfig under requested key")
+	}
+	if got := secret.Annotations[kubeconfigexport.OwnerNamespaceAnnotation]; got != testNamespace {
+		t.Fatalf("owner namespace annotation = %q, want %q", got, testNamespace)
+	}
+
+	latest := &omniv1alpha1.OmniKubeconfigExport{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Name}, latest); err != nil {
+		t.Fatalf("get latest export: %v", err)
+	}
+	if latest.Status.TargetSecretNamespace != testSecretNamespace {
+		t.Fatalf("TargetSecretNamespace = %q, want %q", latest.Status.TargetSecretNamespace, testSecretNamespace)
+	}
+}
+
 func TestOmniKubeconfigExportRemovesPreviousKeyInOwnedSecret(t *testing.T) {
 	t.Parallel()
 
@@ -1979,15 +2025,16 @@ func TestKubeconfigExportWatchRequestMapping(t *testing.T) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      item.Spec.TargetSecretRef.Name,
-			Namespace: item.Namespace,
+			Namespace: testSecretNamespace,
 			Annotations: map[string]string{
-				kubeconfigexport.OwnerAnnotation: item.Name,
+				kubeconfigexport.OwnerAnnotation:          item.Name,
+				kubeconfigexport.OwnerNamespaceAnnotation: item.Namespace,
 			},
 		},
 	}
 	secretRequests := kubeconfigExportRequestsForSecret(ctx, secret)
-	if len(secretRequests) != 1 || secretRequests[0].Name != item.Name {
-		t.Fatalf("kubeconfigExportRequestsForSecret() = %#v, want %q", secretRequests, item.Name)
+	if len(secretRequests) != 1 || secretRequests[0].Name != item.Name || secretRequests[0].Namespace != item.Namespace {
+		t.Fatalf("kubeconfigExportRequestsForSecret() = %#v, want %s/%s", secretRequests, item.Namespace, item.Name)
 	}
 	unannotated := secret.DeepCopy()
 	unannotated.Annotations = nil
@@ -2250,7 +2297,7 @@ func currentKubeconfigExportSecret(t *testing.T, item *omniv1alpha1.OmniKubeconf
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        item.Spec.TargetSecretRef.Name,
-			Namespace:   item.Namespace,
+			Namespace:   kubeconfigexport.TargetSecretNamespace(item),
 			Labels:      kubeconfigexport.SecretLabels(item, testClusterName),
 			Annotations: kubeconfigexport.SecretAnnotations(item, specHash, kubeconfigexport.Hash(data), expirationTime, lastRotationTime),
 		},

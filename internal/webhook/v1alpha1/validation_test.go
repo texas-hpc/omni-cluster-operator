@@ -199,6 +199,13 @@ func TestOmniKubeconfigExportValidation(t *testing.T) {
 			wantError: "target Secret name is required",
 		},
 		{
+			name: "blank target secret namespace",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.TargetSecretRef.Namespace = " "
+			},
+			wantError: "target Secret namespace must not be blank",
+		},
+		{
 			name: "blank target secret key",
 			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
 				item.Spec.TargetSecretRef.Key = " "
