@@ -152,7 +152,7 @@ func (r *OmniKubeconfigExportReconciler) Reconcile(ctx context.Context, req ctrl
 	if !exists {
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: item.Namespace,
+				Namespace: kubeconfigexport.TargetSecretNamespace(item),
 				Name:      item.Spec.TargetSecretRef.Name,
 			},
 			Type: corev1.SecretTypeOpaque,
@@ -354,8 +354,21 @@ func (r *OmniKubeconfigExportReconciler) now() time.Time {
 }
 
 func (r *OmniKubeconfigExportReconciler) targetSecret(ctx context.Context, item *omniv1alpha1.OmniKubeconfigExport) (*corev1.Secret, bool, error) {
+	secretReader := r.SecretReader
+	if secretReader == nil {
+		secretReader = r.Client
+	}
+
+	// Prefer observed status fields for target Secret lookup to handle spec changes correctly
+	targetNamespace := kubeconfigexport.TargetSecretNamespace(item)
+	targetName := item.Spec.TargetSecretRef.Name
+	if item.Status.TargetSecretRef != "" && item.Status.TargetSecretNamespace != "" {
+		targetNamespace = item.Status.TargetSecretNamespace
+		targetName = item.Status.TargetSecretRef
+	}
+
 	secret := &corev1.Secret{}
-	err := r.Get(ctx, client.ObjectKey{Namespace: item.Namespace, Name: item.Spec.TargetSecretRef.Name}, secret)
+	err := secretReader.Get(ctx, client.ObjectKey{Namespace: targetNamespace, Name: targetName}, secret)
 	if err == nil {
 		return secret, true, nil
 	}
@@ -367,14 +380,25 @@ func (r *OmniKubeconfigExportReconciler) targetSecret(ctx context.Context, item 
 }
 
 func (r *OmniKubeconfigExportReconciler) deletePreviousTargetSecret(ctx context.Context, item *omniv1alpha1.OmniKubeconfigExport) error {
+	currentNamespace := kubeconfigexport.TargetSecretNamespace(item)
+	previousNamespace := item.Status.TargetSecretNamespace
+	if previousNamespace == "" {
+		previousNamespace = item.Namespace
+	}
+
 	if item.Spec.DeletionPolicy != omniv1alpha1.KubeconfigExportDeletionPolicyDelete ||
 		item.Status.TargetSecretRef == "" ||
-		item.Status.TargetSecretRef == item.Spec.TargetSecretRef.Name {
+		(item.Status.TargetSecretRef == item.Spec.TargetSecretRef.Name && previousNamespace == currentNamespace) {
 		return nil
 	}
 
+	secretReader := r.SecretReader
+	if secretReader == nil {
+		secretReader = r.Client
+	}
+
 	secret := &corev1.Secret{}
-	err := r.Get(ctx, client.ObjectKey{Namespace: item.Namespace, Name: item.Status.TargetSecretRef}, secret)
+	err := secretReader.Get(ctx, client.ObjectKey{Namespace: previousNamespace, Name: item.Status.TargetSecretRef}, secret)
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
@@ -449,6 +473,9 @@ func kubeconfigExportSpecError(item *omniv1alpha1.OmniKubeconfigExport) error {
 	if strings.TrimSpace(item.Spec.TargetSecretRef.Name) == "" {
 		return fmt.Errorf("targetSecretRef.name is required")
 	}
+	if item.Spec.TargetSecretRef.Namespace != "" && strings.TrimSpace(item.Spec.TargetSecretRef.Namespace) == "" {
+		return fmt.Errorf("targetSecretRef.namespace is required when set")
+	}
 	if strings.TrimSpace(kubeconfigexport.TargetSecretKey(item)) == "" {
 		return fmt.Errorf("targetSecretRef.key is required")
 	}
@@ -513,6 +540,7 @@ func updateKubeconfigExportStatus(ctx context.Context, c client.Client, item *om
 		latest.Status.ObservedGeneration = latest.Generation
 		latest.Status.ClusterRef = latest.Spec.ClusterRef.Name
 		latest.Status.TargetSecretRef = latest.Spec.TargetSecretRef.Name
+		latest.Status.TargetSecretNamespace = kubeconfigexport.TargetSecretNamespace(latest)
 		latest.Status.TargetSecretKey = kubeconfigexport.TargetSecretKey(latest)
 		latest.Status.ServiceAccountUser = latest.Spec.ServiceAccount.User
 		latest.Status.ServiceAccountGroups = append([]string(nil), latest.Spec.ServiceAccount.Groups...)
@@ -534,7 +562,8 @@ func updateKubeconfigExportStatus(ctx context.Context, c client.Client, item *om
 		}
 		switch {
 		case input.exported:
-			message := fmt.Sprintf("exported kubeconfig to Secret %q key %q", latest.Spec.TargetSecretRef.Name, kubeconfigexport.TargetSecretKey(latest))
+			target := client.ObjectKey{Namespace: kubeconfigexport.TargetSecretNamespace(latest), Name: latest.Spec.TargetSecretRef.Name}
+			message := fmt.Sprintf("exported kubeconfig to Secret %q key %q", target.String(), kubeconfigexport.TargetSecretKey(latest))
 			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionExported, metav1.ConditionTrue, latest.Generation, omniv1alpha1.ReasonExported, message))
 			omniv1alpha1.SetCondition(&latest.Status.Conditions, omniv1alpha1.NewCondition(omniv1alpha1.ConditionReady, metav1.ConditionTrue, latest.Generation, omniv1alpha1.ReasonExported, message))
 		case input.acceptedKnown && !input.clusterExists:
@@ -634,6 +663,10 @@ func kubeconfigExportRequestsForSecret(_ context.Context, object client.Object) 
 	if ownerName == "" {
 		return nil
 	}
+	ownerNamespace := object.GetAnnotations()[kubeconfigexport.OwnerNamespaceAnnotation]
+	if ownerNamespace == "" {
+		ownerNamespace = object.GetNamespace()
+	}
 
-	return []reconcile.Request{{NamespacedName: client.ObjectKey{Namespace: object.GetNamespace(), Name: ownerName}}}
+	return []reconcile.Request{{NamespacedName: client.ObjectKey{Namespace: ownerNamespace, Name: ownerName}}}
 }

@@ -42,6 +42,21 @@ func TestTargetSecretKeyDefaultsAndOverrides(t *testing.T) {
 	}
 }
 
+func TestTargetSecretNamespaceDefaultsAndOverrides(t *testing.T) {
+	t.Parallel()
+
+	item := testExport()
+	item.Namespace = "omni-clusters"
+	if got := TargetSecretNamespace(item); got != "omni-clusters" {
+		t.Fatalf("TargetSecretNamespace() = %q, want export namespace", got)
+	}
+
+	item.Spec.TargetSecretRef.Namespace = "skypilot"
+	if got := TargetSecretNamespace(item); got != "skypilot" {
+		t.Fatalf("TargetSecretNamespace() = %q, want explicit namespace", got)
+	}
+}
+
 func TestSpecHashTracksGeneratedKubeconfigInputs(t *testing.T) {
 	t.Parallel()
 

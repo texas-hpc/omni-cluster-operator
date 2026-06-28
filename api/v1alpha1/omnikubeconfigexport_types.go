@@ -38,6 +38,12 @@ type KubeconfigTargetSecretRef struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
+	// namespace is the target Secret namespace. Defaults to the OmniKubeconfigExport namespace.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	Namespace string `json:"namespace,omitempty"`
+
 	// key is the Secret data key. Defaults to kubeconfig.
 	// +kubebuilder:default:=kubeconfig
 	// +optional
@@ -107,6 +113,10 @@ type OmniKubeconfigExportStatus struct {
 	// targetSecretRef is the target Secret name observed by the controller.
 	// +optional
 	TargetSecretRef string `json:"targetSecretRef,omitempty"`
+
+	// targetSecretNamespace is the target Secret namespace observed by the controller.
+	// +optional
+	TargetSecretNamespace string `json:"targetSecretNamespace,omitempty"`
 
 	// targetSecretKey is the target Secret data key observed by the controller.
 	// +optional
