@@ -77,6 +77,7 @@ func SpecHash(item *omniv1alpha1.OmniKubeconfigExport, clusterName string) (stri
 		Version              string   `json:"version"`
 		ClusterName          string   `json:"clusterName"`
 		TargetSecretKey      string   `json:"targetSecretKey"`
+		ContextNamespace     string   `json:"contextNamespace,omitempty"`
 		ServiceAccountUser   string   `json:"serviceAccountUser"`
 		ServiceAccountGroups []string `json:"serviceAccountGroups"`
 		TTL                  string   `json:"ttl"`
@@ -84,6 +85,7 @@ func SpecHash(item *omniv1alpha1.OmniKubeconfigExport, clusterName string) (stri
 		Version:              specHashVersion,
 		ClusterName:          clusterName,
 		TargetSecretKey:      TargetSecretKey(item),
+		ContextNamespace:     item.Spec.ContextNamespace,
 		ServiceAccountUser:   item.Spec.ServiceAccount.User,
 		ServiceAccountGroups: append([]string(nil), item.Spec.ServiceAccount.Groups...),
 		TTL:                  item.Spec.TTL.Duration.String(),
