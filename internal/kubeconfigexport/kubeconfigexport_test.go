@@ -76,6 +76,12 @@ func TestSpecHashTracksGeneratedKubeconfigInputs(t *testing.T) {
 		t.Fatal("SpecHash() did not change when target key changed")
 	}
 
+	contextNamespaceChanged := base.DeepCopy()
+	contextNamespaceChanged.Spec.ContextNamespace = "sky"
+	if got := mustSpecHash(t, contextNamespaceChanged, "edge"); got == baseHash {
+		t.Fatal("SpecHash() did not change when context namespace changed")
+	}
+
 	userChanged := base.DeepCopy()
 	userChanged.Spec.ServiceAccount.User = "other-user"
 	if got := mustSpecHash(t, userChanged, "edge"); got == baseHash {

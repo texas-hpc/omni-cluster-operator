@@ -110,6 +110,9 @@ func validateKubeconfigExport(item *omniv1alpha1.OmniKubeconfigExport) field.Err
 	if item.Spec.TargetSecretRef.Namespace != "" && strings.TrimSpace(item.Spec.TargetSecretRef.Namespace) == "" {
 		allErrs = append(allErrs, field.Required(specPath.Child("targetSecretRef", "namespace"), "target Secret namespace must not be blank"))
 	}
+	if item.Spec.ContextNamespace != "" && strings.TrimSpace(item.Spec.ContextNamespace) == "" {
+		allErrs = append(allErrs, field.Required(specPath.Child("contextNamespace"), "context namespace must not be blank"))
+	}
 	if item.Spec.TargetSecretRef.Key != "" && strings.TrimSpace(item.Spec.TargetSecretRef.Key) == "" {
 		allErrs = append(allErrs, field.Required(specPath.Child("targetSecretRef", "key"), "target Secret key must not be blank"))
 	}

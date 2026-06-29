@@ -206,6 +206,13 @@ func TestOmniKubeconfigExportValidation(t *testing.T) {
 			wantError: "target Secret namespace must not be blank",
 		},
 		{
+			name: "blank context namespace",
+			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
+				item.Spec.ContextNamespace = " "
+			},
+			wantError: "context namespace must not be blank",
+		},
+		{
 			name: "blank target secret key",
 			mutate: func(item *omniv1alpha1.OmniKubeconfigExport) {
 				item.Spec.TargetSecretRef.Key = " "

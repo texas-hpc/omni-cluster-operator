@@ -84,6 +84,14 @@ type OmniKubeconfigExportSpec struct {
 	// +required
 	ServiceAccount KubeconfigServiceAccountSpec `json:"serviceAccount"`
 
+	// contextNamespace sets the namespace on the generated kubeconfig current context.
+	// When omitted, the namespace from Omni's generated kubeconfig is preserved.
+	// +optional
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	ContextNamespace string `json:"contextNamespace,omitempty"`
+
 	// ttl is the requested service-account kubeconfig lifetime.
 	// +required
 	TTL metav1.Duration `json:"ttl"`

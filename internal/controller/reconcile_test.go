@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -1457,6 +1458,51 @@ func TestOmniKubeconfigExportWritesServiceAccountSecret(t *testing.T) {
 	}
 	if latest.Status.NextRotationTime == nil || !latest.Status.NextRotationTime.Time.Equal(now.Add(20*time.Hour)) {
 		t.Fatalf("NextRotationTime = %#v, want %s", latest.Status.NextRotationTime, now.Add(20*time.Hour))
+	}
+}
+
+func TestOmniKubeconfigExportWritesContextNamespace(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Spec.ContextNamespace = "sky"
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}, &omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}).
+		WithObjects(testConnection(), testCluster(), item).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Omni:   &fakeOmni{kubeconfigData: testKubeconfigBytes("first-token")},
+		Clock:  func() time.Time { return now },
+	}
+
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, request); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}
+	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
+		t.Fatalf("get exported Secret: %v", err)
+	}
+	config, err := clientcmd.Load(secret.Data[kubeconfigexport.DefaultSecretKey])
+	if err != nil {
+		t.Fatalf("load kubeconfig: %v", err)
+	}
+	kubeContext := config.Contexts[config.CurrentContext]
+	if kubeContext == nil {
+		t.Fatalf("current context %q not found", config.CurrentContext)
+	}
+	if kubeContext.Namespace != "sky" {
+		t.Fatalf("context namespace = %q, want sky", kubeContext.Namespace)
 	}
 }
 

@@ -296,7 +296,8 @@ func (r *OmniKubeconfigExportReconciler) generateKubeconfig(ctx context.Context,
 
 		return nil, ctrl.Result{RequeueAfter: kubeconfigExportRetryInterval}, true, err
 	}
-	if _, err := clientcmd.Load(kubeconfig); err != nil {
+	loadedKubeconfig, err := clientcmd.Load(kubeconfig)
+	if err != nil {
 		exportErr := fmt.Errorf("generated kubeconfig is invalid: %w", err)
 		statusErr := updateKubeconfigExportStatus(ctx, r.Client, item, kubeconfigExportStatusUpdate{
 			cluster:       cluster,
@@ -312,6 +313,46 @@ func (r *OmniKubeconfigExportReconciler) generateKubeconfig(ctx context.Context,
 		}
 
 		return nil, ctrl.Result{RequeueAfter: kubeconfigExportRetryInterval}, true, exportErr
+	}
+	if item.Spec.ContextNamespace != "" {
+		contextName := loadedKubeconfig.CurrentContext
+		kubeContext, ok := loadedKubeconfig.Contexts[contextName]
+		if !ok {
+			exportErr := fmt.Errorf("generated kubeconfig current context %q was not found", contextName)
+			statusErr := updateKubeconfigExportStatus(ctx, r.Client, item, kubeconfigExportStatusUpdate{
+				cluster:       cluster,
+				connection:    connection,
+				clusterExists: true,
+				acceptedKnown: true,
+				exportErr:     exportErr,
+				reason:        omniv1alpha1.ReasonExportFailed,
+				message:       exportErr.Error(),
+			})
+			if statusErr != nil {
+				return nil, ctrl.Result{}, true, statusErr
+			}
+
+			return nil, ctrl.Result{RequeueAfter: kubeconfigExportRetryInterval}, true, exportErr
+		}
+		kubeContext.Namespace = item.Spec.ContextNamespace
+		kubeconfig, err = clientcmd.Write(*loadedKubeconfig)
+		if err != nil {
+			exportErr := fmt.Errorf("write kubeconfig with context namespace: %w", err)
+			statusErr := updateKubeconfigExportStatus(ctx, r.Client, item, kubeconfigExportStatusUpdate{
+				cluster:       cluster,
+				connection:    connection,
+				clusterExists: true,
+				acceptedKnown: true,
+				exportErr:     exportErr,
+				reason:        omniv1alpha1.ReasonExportFailed,
+				message:       exportErr.Error(),
+			})
+			if statusErr != nil {
+				return nil, ctrl.Result{}, true, statusErr
+			}
+
+			return nil, ctrl.Result{RequeueAfter: kubeconfigExportRetryInterval}, true, exportErr
+		}
 	}
 
 	return kubeconfig, ctrl.Result{}, false, nil
