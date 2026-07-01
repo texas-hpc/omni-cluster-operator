@@ -3,7 +3,7 @@ module github.com/texas-hpc/omni-cluster-operator
 go 1.26.4
 
 require (
-	github.com/cosi-project/runtime v1.16.1
+	github.com/cosi-project/runtime v1.16.2
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
