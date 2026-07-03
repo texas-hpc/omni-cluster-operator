@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -1404,9 +1405,10 @@ func TestOmniKubeconfigExportWritesServiceAccountSecret(t *testing.T) {
 		WithObjects(testConnection(), testCluster(), item).
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
-		Client: k8sClient,
-		Omni:   omni,
-		Clock:  func() time.Time { return now },
+		Client:              k8sClient,
+		Omni:                omni,
+		Clock:               func() time.Time { return now },
+		KubeconfigValidator: KubeconfigValidatorFunc(func(context.Context, []byte) error { return nil }),
 	}
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
 
@@ -1475,9 +1477,10 @@ func TestOmniKubeconfigExportWritesContextNamespace(t *testing.T) {
 		WithObjects(testConnection(), testCluster(), item).
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
-		Client: k8sClient,
-		Omni:   &fakeOmni{kubeconfigData: testKubeconfigBytes("first-token")},
-		Clock:  func() time.Time { return now },
+		Client:              k8sClient,
+		Omni:                &fakeOmni{kubeconfigData: testKubeconfigBytes("first-token")},
+		Clock:               func() time.Time { return now },
+		KubeconfigValidator: KubeconfigValidatorFunc(func(context.Context, []byte) error { return nil }),
 	}
 
 	request := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}}
@@ -1525,9 +1528,10 @@ func TestOmniKubeconfigExportReusesCurrentSecretUntilRenewBefore(t *testing.T) {
 		WithObjects(testConnection(), testCluster(), item, secret).
 		Build()
 	reconciler := &OmniKubeconfigExportReconciler{
-		Client: k8sClient,
-		Omni:   omni,
-		Clock:  func() time.Time { return now },
+		Client:              k8sClient,
+		Omni:                omni,
+		Clock:               func() time.Time { return now },
+		KubeconfigValidator: KubeconfigValidatorFunc(func(context.Context, []byte) error { return nil }),
 	}
 
 	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
@@ -1547,6 +1551,92 @@ func TestOmniKubeconfigExportReusesCurrentSecretUntilRenewBefore(t *testing.T) {
 	}
 	if latest.Status.KubeconfigHash != kubeconfigexport.Hash(data) {
 		t.Fatalf("KubeconfigHash = %q, want current hash", latest.Status.KubeconfigHash)
+	}
+}
+
+func TestOmniKubeconfigExportRotatesWhenCurrentSecretAuthFails(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	oldData := testKubeconfigBytes("stale-token")
+	expirationTime := metav1.NewTime(now.Add(24 * time.Hour))
+	lastRotationTime := metav1.NewTime(now.Add(-time.Hour))
+	secret := currentKubeconfigExportSecret(t, item, oldData, expirationTime, lastRotationTime)
+	omni := &fakeOmni{kubeconfigData: testKubeconfigBytes("rotated-token")}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}, &omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}).
+		WithObjects(testConnection(), testCluster(), item, secret).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Omni:   omni,
+		Clock:  func() time.Time { return now },
+		KubeconfigValidator: KubeconfigValidatorFunc(func(context.Context, []byte) error {
+			return apierrors.NewForbidden(schema.GroupResource{Resource: "nodes"}, "", errors.New("token no longer valid"))
+		}),
+	}
+
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if omni.kubeconfigCalls != 1 {
+		t.Fatalf("kubeconfigCalls = %d, want 1", omni.kubeconfigCalls)
+	}
+	if result.RequeueAfter != 20*time.Hour {
+		t.Fatalf("RequeueAfter = %s, want 20h", result.RequeueAfter)
+	}
+
+	updated := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: item.Spec.TargetSecretRef.Name}, updated); err != nil {
+		t.Fatalf("get exported Secret: %v", err)
+	}
+	if string(updated.Data[kubeconfigexport.DefaultSecretKey]) != string(testKubeconfigBytes("rotated-token")) {
+		t.Fatalf("Secret kubeconfig data was not rotated")
+	}
+}
+
+func TestOmniKubeconfigExportKeepsCurrentSecretOnTransientValidationFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := testScheme(t)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	item := testKubeconfigExport()
+	item.Finalizers = []string{omniv1alpha1.Finalizer}
+	data := testKubeconfigBytes("current-token")
+	expirationTime := metav1.NewTime(now.Add(24 * time.Hour))
+	lastRotationTime := metav1.NewTime(now.Add(-time.Hour))
+	secret := currentKubeconfigExportSecret(t, item, data, expirationTime, lastRotationTime)
+	omni := &fakeOmni{kubeconfigData: testKubeconfigBytes("rotated-token")}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&omniv1alpha1.OmniKubeconfigExport{}, &omniv1alpha1.OmniCluster{}, &omniv1alpha1.OmniConnection{}).
+		WithObjects(testConnection(), testCluster(), item, secret).
+		Build()
+	reconciler := &OmniKubeconfigExportReconciler{
+		Client: k8sClient,
+		Omni:   omni,
+		Clock:  func() time.Time { return now },
+		KubeconfigValidator: KubeconfigValidatorFunc(func(context.Context, []byte) error {
+			return errors.New("temporary workload API timeout")
+		}),
+	}
+
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: testNamespace, Name: item.Name}})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if omni.kubeconfigCalls != 0 {
+		t.Fatalf("kubeconfigCalls = %d, want 0", omni.kubeconfigCalls)
+	}
+	if result.RequeueAfter != 20*time.Hour {
+		t.Fatalf("RequeueAfter = %s, want 20h", result.RequeueAfter)
 	}
 }
 

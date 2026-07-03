@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,12 +47,25 @@ import (
 
 const kubeconfigExportRetryInterval = time.Minute
 
+var errKubeconfigNotUsable = errors.New("kubeconfig is not usable")
+
+type KubeconfigValidator interface {
+	Validate(context.Context, []byte) error
+}
+
+type KubeconfigValidatorFunc func(context.Context, []byte) error
+
+func (f KubeconfigValidatorFunc) Validate(ctx context.Context, kubeconfig []byte) error {
+	return f(ctx, kubeconfig)
+}
+
 // OmniKubeconfigExportReconciler reconciles an OmniKubeconfigExport object.
 type OmniKubeconfigExportReconciler struct {
 	client.Client
-	SecretReader client.Reader
-	Omni         omniapi.Client
-	Clock        func() time.Time
+	SecretReader        client.Reader
+	Omni                omniapi.Client
+	Clock               func() time.Time
+	KubeconfigValidator KubeconfigValidator
 }
 
 // +kubebuilder:rbac:groups=omni.texashpc.com,resources=omnikubeconfigexports,verbs=get;list;watch;create;update;patch;delete
@@ -61,8 +76,6 @@ type OmniKubeconfigExportReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *OmniKubeconfigExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-
 	item := &omniv1alpha1.OmniKubeconfigExport{}
 	if err := r.Get(ctx, req.NamespacedName, item); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -119,7 +132,7 @@ func (r *OmniKubeconfigExportReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	if exists {
-		if state, current := currentKubeconfigSecretState(secret, targetKey, specHash, now, item.Spec.RenewBefore); current {
+		if state, current := r.reusableCurrentKubeconfigSecretState(ctx, secret, targetKey, specHash, now, item.Spec.RenewBefore); current {
 			statusErr := updateKubeconfigExportStatus(ctx, r.Client, item, kubeconfigExportStatusUpdate{
 				cluster:          cluster,
 				connection:       connection,
@@ -177,7 +190,7 @@ func (r *OmniKubeconfigExportReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, err
 	}
 
-	log.V(1).Info("exported Omni workload kubeconfig", "secret", types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}.String(), "cluster", clusterName, "hash", kubeconfigHash)
+	logf.FromContext(ctx).V(1).Info("exported Omni workload kubeconfig", "secret", types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}.String(), "cluster", clusterName, "hash", kubeconfigHash)
 
 	statusErr := updateKubeconfigExportStatus(ctx, r.Client, item, kubeconfigExportStatusUpdate{
 		cluster:          cluster,
@@ -394,6 +407,40 @@ func (r *OmniKubeconfigExportReconciler) now() time.Time {
 	return time.Now().UTC()
 }
 
+func (r *OmniKubeconfigExportReconciler) kubeconfigValidator() KubeconfigValidator {
+	if r.KubeconfigValidator != nil {
+		return r.KubeconfigValidator
+	}
+
+	return workloadKubeconfigValidator{}
+}
+
+type workloadKubeconfigValidator struct{}
+
+func (workloadKubeconfigValidator) Validate(ctx context.Context, kubeconfig []byte) error {
+	config, err := clientcmd.RESTConfigFromKubeConfig(kubeconfig)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errKubeconfigNotUsable, err)
+	}
+	config.Timeout = 10 * time.Second
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errKubeconfigNotUsable, err)
+	}
+	_, err = clientset.Discovery().ServerVersion()
+
+	return err
+}
+
+func kubeconfigValidationRequiresRotation(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return errors.Is(err, errKubeconfigNotUsable) || apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err)
+}
+
 func (r *OmniKubeconfigExportReconciler) targetSecret(ctx context.Context, item *omniv1alpha1.OmniKubeconfigExport) (*corev1.Secret, bool, error) {
 	secretReader := r.SecretReader
 	if secretReader == nil {
@@ -492,6 +539,25 @@ func currentKubeconfigSecretState(secret *corev1.Secret, targetKey, specHash str
 		lastRotationTime: lastRotationTime,
 		nextRotationTime: &nextRotationTime,
 	}, true
+}
+
+func (r *OmniKubeconfigExportReconciler) reusableCurrentKubeconfigSecretState(ctx context.Context, secret *corev1.Secret, targetKey, specHash string, now time.Time, renewBefore *metav1.Duration) (*currentKubeconfigState, bool) {
+	state, current := currentKubeconfigSecretState(secret, targetKey, specHash, now, renewBefore)
+	if !current {
+		return nil, false
+	}
+
+	validationErr := r.kubeconfigValidator().Validate(ctx, secret.Data[targetKey])
+	if kubeconfigValidationRequiresRotation(validationErr) {
+		logf.FromContext(ctx).Info("existing exported kubeconfig is no longer usable; rotating", "secret", types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}.String(), "error", validationErr)
+
+		return nil, false
+	}
+	if validationErr != nil {
+		logf.FromContext(ctx).V(1).Info("existing exported kubeconfig validation failed without proving it stale; keeping current Secret", "secret", types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}.String(), "error", validationErr)
+	}
+
+	return state, true
 }
 
 func requeueAfter(now time.Time, nextRotationTime *metav1.Time) time.Duration {
