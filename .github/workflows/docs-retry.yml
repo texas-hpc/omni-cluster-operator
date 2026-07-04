@@ -1,0 +1,78 @@
+name: Retry Docs Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - Docs
+    types:
+      - completed
+
+permissions: {}
+
+jobs:
+  retry-pages-deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master'
+    name: Retry failed Pages deploy
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Rerun transient Pages deploy failure
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const { owner, repo } = context.repo;
+
+            const { data: currentRun } = await github.request(
+              'GET /repos/{owner}/{repo}/actions/runs/{run_id}',
+              {
+                owner,
+                repo,
+                run_id: run.id,
+              },
+            );
+
+            if (currentRun.run_attempt !== 1) {
+              core.notice(`Docs run ${run.id} is attempt ${currentRun.run_attempt}; not retrying again.`);
+              return;
+            }
+
+            const { data: jobList } = await github.request(
+              'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs',
+              {
+                owner,
+                repo,
+                run_id: run.id,
+                attempt_number: 1,
+                per_page: 100,
+              },
+            );
+
+            const jobs = jobList.jobs || [];
+            const build = jobs.find((job) => job.name === 'Build docs');
+            const deploy = jobs.find((job) => job.name === 'Deploy docs');
+
+            if (build?.conclusion !== 'success' || deploy?.conclusion !== 'failure') {
+              core.notice(
+                `Docs run ${run.id} is not a Pages deploy flake pattern: ` +
+                  `Build docs=${build?.conclusion ?? 'missing'}, ` +
+                  `Deploy docs=${deploy?.conclusion ?? 'missing'}.`,
+              );
+              return;
+            }
+
+            core.notice(`Retrying failed jobs for transient Docs deploy failure in run ${run.id}.`);
+
+            await github.request(
+              'POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs',
+              {
+                owner,
+                repo,
+                run_id: run.id,
+              },
+            );
