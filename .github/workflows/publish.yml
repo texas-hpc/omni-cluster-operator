@@ -36,6 +36,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      pull-requests: read
     name: Publish image and charts
     runs-on: ubuntu-latest
     steps:
@@ -85,6 +86,65 @@ jobs:
       - name: Verify before publishing
         run: task ci
 
+      - name: Package Helm charts
+        env:
+          CHART_VERSION: ${{ steps.version.outputs.version }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: task chart-package
+
+      - name: Create draft GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          CRD_CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator-crds
+          CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag_name="v${VERSION}"
+          echo "tag_name=${tag_name}" >> "${GITHUB_OUTPUT}"
+
+          if gh release view "${tag_name}" >/dev/null 2>&1; then
+            echo "Release ${tag_name} already exists; continuing artifact verification."
+            {
+              echo "cleanup=false"
+              echo "created=false"
+            } >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "cleanup=true" >> "${GITHUB_OUTPUT}"
+
+          notes="$(printf '%s\n' \
+            "Published after verifying the operator image and both Helm charts in GHCR." \
+            "" \
+            "Release log: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/CHANGELOG.md" \
+            "" \
+            "## OCI artifacts" \
+            "" \
+            "- Image: \`${IMAGE_REPOSITORY}:${VERSION}\`" \
+            "- CRD chart: \`${CRD_CHART_REPOSITORY} --version ${VERSION}\`" \
+            "- Operator chart: \`${CHART_REPOSITORY} --version ${VERSION}\`")"
+
+          release_flags=(
+            --draft
+            --target "${GITHUB_SHA}"
+            --title "${tag_name}"
+            --notes "${notes}"
+            --generate-notes
+          )
+
+          if [[ "${VERSION}" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
+
+          gh release create "${tag_name}" \
+            "dist/charts/omni-cluster-operator-crds-${VERSION}.tgz#omni-cluster-operator-crds-${VERSION}.tgz" \
+            "dist/charts/omni-cluster-operator-${VERSION}.tgz#omni-cluster-operator-${VERSION}.tgz" \
+            "${release_flags[@]}"
+
+          echo "created=true" >> "${GITHUB_OUTPUT}"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
@@ -121,12 +181,6 @@ jobs:
 
       - name: Setup ORAS
         uses: oras-project/setup-oras@38de303aac69abb66f3e6255b7198bff35f323e3 # v2.0.0
-
-      - name: Package Helm charts
-        env:
-          CHART_VERSION: ${{ steps.version.outputs.version }}
-          APP_VERSION: ${{ steps.version.outputs.version }}
-        run: task chart-package
 
       - name: Push Helm charts to GHCR OCI registry
         env:
@@ -170,64 +224,17 @@ jobs:
           helm show chart "${CRD_CHART_REPOSITORY}" --version "${VERSION}" >/dev/null
           helm show chart "${CHART_REPOSITORY}" --version "${VERSION}" >/dev/null
 
-      - name: Create GitHub release
+      - name: Publish GitHub release
+        if: steps.release.outputs.created == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          CRD_CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator-crds
-          CHART_REPOSITORY: oci://ghcr.io/${{ github.repository_owner }}/charts/omni-cluster-operator
-          VERSION: ${{ steps.version.outputs.version }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
         run: |
-          tag_name="v${VERSION}"
+          gh release edit "${TAG_NAME}" --draft=false --latest
 
-          if gh release view "${tag_name}" >/dev/null 2>&1; then
-            echo "Release ${tag_name} already exists; skipping creation."
-            exit 0
-          fi
-
-          notes="$(printf '%s\n' \
-            "Published after verifying the operator image and both Helm charts in GHCR." \
-            "" \
-            "Release log: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/CHANGELOG.md" \
-            "" \
-            "## OCI artifacts" \
-            "" \
-            "- Image: \`${IMAGE_REPOSITORY}:${VERSION}\`" \
-            "- CRD chart: \`${CRD_CHART_REPOSITORY} --version ${VERSION}\`" \
-            "- Operator chart: \`${CHART_REPOSITORY} --version ${VERSION}\`")"
-
-          release_flags=(
-            --target "${GITHUB_SHA}"
-            --title "${tag_name}"
-            --notes "${notes}"
-            --generate-notes
-          )
-
-          if [[ "${VERSION}" == *-* ]]; then
-            release_flags+=(--prerelease)
-          fi
-
-          release_assets=(
-            "dist/charts/omni-cluster-operator-crds-${VERSION}.tgz#omni-cluster-operator-crds-${VERSION}.tgz"
-            "dist/charts/omni-cluster-operator-${VERSION}.tgz#omni-cluster-operator-${VERSION}.tgz"
-          )
-
-          for attempt in {1..5}; do
-            if gh release create "${tag_name}" "${release_assets[@]}" "${release_flags[@]}"; then
-              exit 0
-            fi
-
-            if gh release view "${tag_name}" >/dev/null 2>&1; then
-              echo "Release ${tag_name} exists after create returned an error; treating as complete."
-              exit 0
-            fi
-
-            if [[ "${attempt}" -eq 5 ]]; then
-              echo "Failed to create release ${tag_name} after ${attempt} attempts."
-              exit 1
-            fi
-
-            sleep_seconds=$((attempt * 15))
-            echo "Release creation failed; retrying in ${sleep_seconds}s."
-            sleep "${sleep_seconds}"
-          done
+      - name: Delete draft GitHub release after failure
+        if: failure() && steps.release.outputs.cleanup == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+        run: gh release delete "${TAG_NAME}" --cleanup-tag --yes || true
