@@ -4,16 +4,20 @@ on:
   push:
     branches:
       - master
+    paths:
+      - ".github/workflows/docs.yml"
+      - "docs/**"
+      - "mkdocs.yml"
   pull_request:
     branches:
       - master
+    paths:
+      - ".github/workflows/docs.yml"
+      - "docs/**"
+      - "mkdocs.yml"
   workflow_dispatch:
 
 permissions: {}
-
-concurrency:
-  group: docs-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -56,6 +60,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
     name: Deploy docs
     runs-on: ubuntu-latest
     steps:
