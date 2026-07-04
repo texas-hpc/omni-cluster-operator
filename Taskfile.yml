@@ -239,18 +239,26 @@ tasks:
     internal: true
     cmds:
       - |
-        if [[ ! -f .custom-gcl.yml ]]; then
+        custom_config=".custom-gcl.yml"
+        binary="bin/golangci-lint"
+
+        if [[ ! -f "${custom_config}" ]]; then
           exit 0
         fi
 
         mkdir -p bin
-        binary="bin/golangci-lint"
 
-        if [[ ! -x "${binary}" || .custom-gcl.yml -nt "${binary}" ]]; then
-          echo "Building custom golangci-lint with module plugins..."
-          golangci-lint custom --destination bin --name golangci-lint-custom
-          mv -f bin/golangci-lint-custom "${binary}"
+        if [[ -x "${binary}" && ! "${custom_config}" -nt "${binary}" ]]; then
+          exit 0
         fi
+
+        tmpdir="$(mktemp -d .golangci-lint-custom.XXXXXX)"
+        trap 'rm -rf "${tmpdir}"' EXIT
+
+        echo "Building custom golangci-lint with module plugins..."
+        golangci-lint custom --destination "${tmpdir}" --name golangci-lint
+        install -m 0755 "${tmpdir}/golangci-lint" "${binary}"
+        "${binary}" version >/dev/null
 
   fmt:
     desc: Run go fmt.
