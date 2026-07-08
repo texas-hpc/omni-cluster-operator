@@ -1,6 +1,10 @@
 package helmrelease
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +122,63 @@ func TestActionConfigInitializesRegistryClient(t *testing.T) {
 	}
 	if got := action.NewInstall(cfg).GetRegistryClient(); got != cfg.RegistryClient {
 		t.Fatal("action.NewInstall() did not inherit registry client")
+	}
+}
+
+func TestWithIsolatedWorkingDirectory(t *testing.T) {
+	original, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+
+	parent := t.TempDir()
+	var isolated string
+	err = withIsolatedWorkingDirectory(parent, func() error {
+		var getErr error
+		isolated, getErr = os.Getwd()
+
+		return getErr
+	})
+	if err != nil {
+		t.Fatalf("withIsolatedWorkingDirectory() error = %v", err)
+	}
+
+	after, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() after callback error = %v", err)
+	}
+	if after != original {
+		t.Fatalf("working directory after callback = %q, want %q", after, original)
+	}
+
+	rel, err := filepath.Rel(parent, isolated)
+	if err != nil {
+		t.Fatalf("filepath.Rel() error = %v", err)
+	}
+	if rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		t.Fatalf("isolated working directory = %q, want child of %q", isolated, parent)
+	}
+}
+
+func TestWithIsolatedWorkingDirectoryRestoresOnError(t *testing.T) {
+	original, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+
+	sentinelErr := errors.New("sentinel")
+	if err := withIsolatedWorkingDirectory(t.TempDir(), func() error {
+		return sentinelErr
+	}); !errors.Is(err, sentinelErr) {
+		t.Fatalf("withIsolatedWorkingDirectory() error = %v, want wrapped sentinel", err)
+	}
+
+	after, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() after error path = %v", err)
+	}
+	if after != original {
+		t.Fatalf("working directory after error path = %q, want %q", after, original)
 	}
 }
 

@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"helm.sh/helm/v4/pkg/action"
@@ -176,7 +178,13 @@ func (c Client) loadChart(ctx context.Context, item *omniv1alpha1.OmniHelmReleas
 	client.Namespace = Namespace(item)
 
 	locateChartMu.Lock()
-	chartPath, err := client.LocateChart(chartRef, settings)
+	var chartPath string
+	err := withIsolatedWorkingDirectory(c.CacheDir, func() error {
+		var locateErr error
+		chartPath, locateErr = client.LocateChart(chartRef, settings)
+
+		return locateErr
+	})
 	locateChartMu.Unlock()
 	if err != nil {
 		if repoURL == "" {
@@ -198,6 +206,43 @@ func (c Client) loadChart(ctx context.Context, item *omniv1alpha1.OmniHelmReleas
 	}
 
 	return chart, nil
+}
+
+func withIsolatedWorkingDirectory(cacheDir string, fn func() error) error {
+	// Temporary mitigation for GHSA-fxhp-mv3v-67qp / CVE-2026-50163 until
+	// oras.land/oras-go/v2 ships a patched release consumable by this project.
+	parent := cacheDir
+	if parent == "" {
+		parent = os.TempDir()
+	}
+
+	dir, err := os.MkdirTemp(parent, "helm-oci-cwd-*")
+	if err != nil {
+		return fmt.Errorf("create isolated working directory: %w", err)
+	}
+	defer os.RemoveAll(dir)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("read current working directory: %w", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		return fmt.Errorf("switch to isolated working directory %q: %w", dir, err)
+	}
+	defer func() {
+		_ = os.Chdir(wd)
+	}()
+
+	if err := fn(); err != nil {
+		relDir, relErr := filepath.Rel(parent, dir)
+		if relErr != nil {
+			relDir = dir
+		}
+
+		return fmt.Errorf("run action in isolated working directory %q: %w", relDir, err)
+	}
+
+	return nil
 }
 
 func waitStrategy(item *omniv1alpha1.OmniHelmRelease) kube.WaitStrategy {
