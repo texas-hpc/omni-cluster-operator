@@ -220,7 +220,9 @@ func withIsolatedWorkingDirectory(cacheDir string, fn func() error) error {
 	if err != nil {
 		return fmt.Errorf("create isolated working directory: %w", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() {
+		_ = os.RemoveAll(dir)
+	}()
 
 	wd, err := os.Getwd()
 	if err != nil {
