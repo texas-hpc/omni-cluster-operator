@@ -132,6 +132,11 @@ func TestWithIsolatedWorkingDirectory(t *testing.T) {
 	}
 
 	parent := t.TempDir()
+	resolvedParent, err := filepath.EvalSymlinks(parent)
+	if err != nil {
+		t.Fatalf("filepath.EvalSymlinks() error = %v", err)
+	}
+
 	var isolated string
 	err = withIsolatedWorkingDirectory(parent, func() error {
 		var getErr error
@@ -151,12 +156,12 @@ func TestWithIsolatedWorkingDirectory(t *testing.T) {
 		t.Fatalf("working directory after callback = %q, want %q", after, original)
 	}
 
-	rel, err := filepath.Rel(parent, isolated)
+	rel, err := filepath.Rel(resolvedParent, isolated)
 	if err != nil {
 		t.Fatalf("filepath.Rel() error = %v", err)
 	}
 	if rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
-		t.Fatalf("isolated working directory = %q, want child of %q", isolated, parent)
+		t.Fatalf("isolated working directory = %q, want child of %q", isolated, resolvedParent)
 	}
 }
 
